@@ -4,13 +4,15 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, Clock, TrendingUp, X } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
-import { steItems, categories } from '@/lib/ste-data'
+import { steItems, categories, synonyms } from '@/lib/ste-data'
+import { correctTypos, russianStem } from '@/lib/search-engine'
 
 interface Suggestion {
-  type: 'history' | 'category' | 'product' | 'trending'
+  type: 'history' | 'category' | 'product' | 'trending' | 'correction' | 'synonym'
   text: string
   icon?: React.ReactNode
   steId?: string
+  subtext?: string
 }
 
 export function SmartSearchBar() {
@@ -42,7 +44,8 @@ export function SmartSearchBar() {
       const recentSearches = searchHistory.slice(0, 5).map(item => ({
         type: 'history' as const,
         text: item.query,
-        icon: <Clock className="h-4 w-4 text-[#666666]" />
+        icon: <Clock className="h-4 w-4 text-[#666666]" />,
+        subtext: `${item.resultsCount} результатов`
       }))
       
       if (recentSearches.length > 0) {
@@ -60,45 +63,81 @@ export function SmartSearchBar() {
       return results
     }
 
-    // Поиск по категориям
+    // 1. Проверяем на опечатки
+    const typoCorrection = correctTypos(lowerQuery)
+    if (typoCorrection.wasChanged) {
+      results.push({
+        type: 'correction' as const,
+        text: typoCorrection.corrected,
+        subtext: `Возможно, вы имели в виду`,
+        icon: <Search className="h-4 w-4 text-[#C93535]" />
+      })
+    }
+
+    // 2. Поиск по синонимам
+    const queryStem = russianStem(lowerQuery.split(' ')[0])
+    for (const [term, syns] of Object.entries(synonyms)) {
+      const termStem = russianStem(term)
+      if (termStem === queryStem || syns.some(s => russianStem(s) === queryStem)) {
+        // Добавляем основной термин и синонимы как подсказки
+        if (term.toLowerCase() !== lowerQuery) {
+          results.push({
+            type: 'synonym' as const,
+            text: term,
+            subtext: `Синоним: ${syns.slice(0, 2).join(', ')}`,
+            icon: <Search className="h-4 w-4 text-[#2D4A7C]" />
+          })
+        }
+        break
+      }
+    }
+
+    // 3. Поиск по категориям
     const matchingCategories = categories
       .filter(cat => cat.toLowerCase().includes(lowerQuery))
       .slice(0, 2)
       .map(cat => ({
         type: 'category' as const,
         text: cat,
+        subtext: 'Категория',
         icon: <Search className="h-4 w-4 text-[#2D4A7C]" />
       }))
     results.push(...matchingCategories)
 
-    // Поиск по товарам
+    // 4. Морфологический поиск по товарам
     const matchingProducts = steItems
-      .filter(ste => 
-        ste.name.toLowerCase().includes(lowerQuery) ||
-        ste.description.toLowerCase().includes(lowerQuery) ||
-        ste.code.toLowerCase().includes(lowerQuery)
-      )
+      .filter(ste => {
+        const nameStem = ste.name.toLowerCase().split(' ').map(russianStem)
+        const descStem = ste.description.toLowerCase().split(' ').map(russianStem)
+        return ste.name.toLowerCase().includes(lowerQuery) ||
+          ste.description.toLowerCase().includes(lowerQuery) ||
+          ste.code.toLowerCase().includes(lowerQuery) ||
+          nameStem.includes(queryStem) ||
+          descStem.includes(queryStem)
+      })
       .slice(0, 5)
       .map(ste => ({
         type: 'product' as const,
         text: ste.name,
+        subtext: `${ste.category} • ${ste.priceMin.toLocaleString('ru-RU')} ₽`,
         steId: ste.id,
         icon: <Search className="h-4 w-4 text-[#666666]" />
       }))
     results.push(...matchingProducts)
 
-    // Поиск по истории
+    // 5. Поиск по истории
     const matchingHistory = searchHistory
       .filter(item => item.query.toLowerCase().includes(lowerQuery))
       .slice(0, 2)
       .map(item => ({
         type: 'history' as const,
         text: item.query,
+        subtext: `${item.resultsCount} результатов`,
         icon: <Clock className="h-4 w-4 text-[#666666]" />
       }))
     
     // Добавляем историю в начало
-    return [...matchingHistory, ...results].slice(0, 8)
+    return [...matchingHistory, ...results].slice(0, 10)
   }, [searchHistory])
 
   // Обновление подсказок при изменении запроса
@@ -240,9 +279,16 @@ export function SmartSearchBar() {
                     onMouseEnter={() => setSelectedIndex(index)}
                   >
                     {suggestion.icon}
-                    <span className="flex-1 text-sm text-[#1a1a1a]">
-                      {suggestion.text}
-                    </span>
+                    <div className="flex-1">
+                      <span className="block text-sm text-[#1a1a1a]">
+                        {suggestion.text}
+                      </span>
+                      {suggestion.subtext && (
+                        <span className="block text-xs text-[#666666]">
+                          {suggestion.subtext}
+                        </span>
+                      )}
+                    </div>
                     {isHistory && (
                       <button
                         onClick={(e) => {
@@ -257,6 +303,16 @@ export function SmartSearchBar() {
                     {isTrending && (
                       <span className="rounded bg-[#C93535]/10 px-2 py-0.5 text-xs text-[#C93535]">
                         популярно
+                      </span>
+                    )}
+                    {suggestion.type === 'correction' && (
+                      <span className="rounded bg-orange-100 px-2 py-0.5 text-xs text-orange-700">
+                        исправление
+                      </span>
+                    )}
+                    {suggestion.type === 'synonym' && (
+                      <span className="rounded bg-[#2D4A7C]/10 px-2 py-0.5 text-xs text-[#2D4A7C]">
+                        синоним
                       </span>
                     )}
                   </button>

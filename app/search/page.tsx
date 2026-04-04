@@ -18,7 +18,8 @@ import { SearchExplanation } from '@/components/search/search-explanation'
 import { SessionsComparison } from '@/components/search/sessions-comparison'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Info, Zap, Clock } from 'lucide-react'
+import { Info, Zap, Clock, RefreshCw } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 export default function SearchPage() {
   const router = useRouter()
@@ -41,6 +42,8 @@ export default function SearchPage() {
   const [showExplanation, setShowExplanation] = useState(true)
   const [filters, setFilters] = useState<FilterSettings>(defaultFilters)
   const [selectedItem, setSelectedItem] = useState<{ id: string; price: number; quantity: number } | null>(null)
+  const [isReindexing, setIsReindexing] = useState(false)
+  const [reindexMessage, setReindexMessage] = useState('')
   
   useEffect(() => {
     if (!isAuthenticated) {
@@ -121,9 +124,34 @@ export default function SearchPage() {
     addInteraction(steId, type)
     setLastInteraction({ steId, type })
     
+    // Показываем анимацию переиндексации
+    const item = sortedResults.find(r => r.id === steId)
+    if (item) {
+      let message = ''
+      switch (type) {
+        case 'click':
+          message = `Просмотр "${item.name}" учтён - похожие товары будут выше`
+          break
+        case 'purchase':
+          message = `Покупка "${item.name}" учтена - рекомендации обновлены`
+          break
+        case 'positive':
+          message = `Положительная оценка учтена - приоритет "${item.name}" повышен`
+          break
+        case 'negative':
+          message = `Отрицательная оценка учтена - приоритет "${item.name}" понижен`
+          break
+      }
+      
+      if (message) {
+        setReindexMessage(message)
+        setIsReindexing(true)
+        setTimeout(() => setIsReindexing(false), 3000)
+      }
+    }
+    
     // При клике на товар - показываем подсказки по бюджету
     if (type === 'click' && filters.budgetMax && filters.quantity) {
-      const item = sortedResults.find(r => r.id === steId)
       if (item) {
         setSelectedItem({
           id: steId,
@@ -254,6 +282,16 @@ export default function SearchPage() {
                   <span>Локальный морфологический анализ</span>
                 </div>
               </div>
+            )}
+
+            {/* Уведомление о динамической переиндексации */}
+            {isReindexing && (
+              <Alert className="animate-in fade-in slide-in-from-top-2 border-[#2D4A7C] bg-[#2D4A7C]/10">
+                <RefreshCw className="h-4 w-4 animate-spin text-[#2D4A7C]" />
+                <AlertDescription className="ml-2 text-[#2D4A7C]">
+                  <strong>Динамическая индексация:</strong> {reindexMessage}
+                </AlertDescription>
+              </Alert>
             )}
           </div>
 
