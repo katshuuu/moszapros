@@ -157,14 +157,11 @@ export function resetConnection(): void {
   pool = null
 }
 
-// Types for database entities
+// Types for database entities - adapted to user's actual table structure
 export interface STERecord {
   ste_id: number
-  ste_name: string
-  okpd2_code?: string
-  okpd2_name?: string
-  unit?: string
-  category?: string
+  name: string
+  category: string
 }
 
 export interface ContractRecord {
