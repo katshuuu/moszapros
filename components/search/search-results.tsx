@@ -24,6 +24,7 @@ interface SearchResultsProps {
   userRole?: string
   onInteraction?: (steId: string, type: 'view' | 'click' | 'purchase' | 'positive' | 'negative') => void
   typoCorrection?: TypoCorrection
+  selectedItemId?: string | null
 }
 
 const roleLabels: Record<string, string> = {
@@ -32,7 +33,7 @@ const roleLabels: Record<string, string> = {
   construction: 'строительных материалов'
 }
 
-export function SearchResults({ results, query, userRole, onInteraction, typoCorrection }: SearchResultsProps) {
+export function SearchResults({ results, query, userRole, onInteraction, typoCorrection, selectedItemId }: SearchResultsProps) {
   const { favorites, toggleFavorite, addInteraction, interactions } = useAuthStore()
   const { getPositionChanges, getDetailedExplanation } = useSessionsStore()
   
@@ -116,6 +117,7 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
           const isTopResult = index < 3
           const hasPersonalization = item.personalizationFactors && 
             (item.personalizationFactors.roleBonus > 0 || item.personalizationFactors.interactionBonus > 0)
+          const isSelectedItem = selectedItemId === item.id
 
           // Получаем изменение позиции для этого товара
           const positionChange = positionChangeMap.get(item.id)
@@ -124,7 +126,11 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
           return (
             <Card 
               key={item.id} 
-              className="overflow-hidden border-[#e0e0e0] bg-white transition-shadow hover:shadow-md"
+              className={`overflow-hidden transition-shadow hover:shadow-md ${
+                isSelectedItem 
+                  ? 'border-2 border-[#C93535] bg-[#C93535]/5 ring-2 ring-[#C93535]/20' 
+                  : 'border-[#e0e0e0] bg-white'
+              }`}
               onClick={() => handleClick(item)}
             >
               <CardContent className="p-6">

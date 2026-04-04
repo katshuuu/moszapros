@@ -10,6 +10,8 @@ import { steItems, categories, roleRecommendations } from '@/lib/ste-data'
 import { performSearch, explainRankingChanges, type SearchResponse, type SearchResult } from '@/lib/search-engine'
 import { SearchInput } from '@/components/search/search-input'
 import { SearchFilters } from '@/components/search/search-filters'
+import { FiltersPanel, type SearchFilters as FilterSettings, defaultFilters } from '@/components/search/filters-panel'
+import { BudgetSuggestions } from '@/components/search/budget-suggestions'
 import { SearchResults } from '@/components/search/search-results'
 import { RecommendedSection } from '@/components/search/recommended-section'
 import { SearchExplanation } from '@/components/search/search-explanation'
@@ -27,6 +29,8 @@ export default function SearchPage() {
   const [sortBy, setSortBy] = useState<'relevance' | 'price_asc' | 'price_desc' | 'popularity'>('relevance')
   const [lastInteraction, setLastInteraction] = useState<{ steId: string; type: string } | undefined>()
   const [showExplanation, setShowExplanation] = useState(true)
+  const [filters, setFilters] = useState<FilterSettings>(defaultFilters)
+  const [selectedItem, setSelectedItem] = useState<{ id: string; price: number; quantity: number } | null>(null)
   
   useEffect(() => {
     if (!isAuthenticated) {
@@ -42,27 +46,48 @@ export default function SearchPage() {
     return performSearch(query, category, user?.role, interactions)
   }, [query, category, user?.role, interactions])
 
-  // Сортировка результатов
+  // Фильтрация и сортировка результатов
   const sortedResults = useMemo(() => {
     if (!searchResponse) return []
     
-    const sorted = [...searchResponse.results]
-    switch (sortBy) {
+    let filtered = [...searchResponse.results]
+    
+    // Применяем фильтры бюджета
+    if (filters.maxPricePerUnit) {
+      filtered = filtered.filter(item => item.priceMin <= filters.maxPricePerUnit!)
+    }
+    
+    // Фильтр по минимальному бюджету
+    if (filters.budgetMin) {
+      filtered = filtered.filter(item => item.priceMin >= filters.budgetMin!)
+    }
+    
+    // Фильтр по наличию (имитация - используем purchaseCount как индикатор популярности/наличия)
+    if (filters.inStock) {
+      filtered = filtered.filter(item => (item.purchaseCount || 0) > 0)
+    }
+    
+    // Сортировка с учетом настроек фильтра
+    const sortOption = filters.sortBy || sortBy
+    switch (sortOption) {
       case 'price_asc':
-        sorted.sort((a, b) => a.priceMin - b.priceMin)
+        filtered.sort((a, b) => a.priceMin - b.priceMin)
         break
       case 'price_desc':
-        sorted.sort((a, b) => b.priceMax - a.priceMax)
+        filtered.sort((a, b) => b.priceMax - a.priceMax)
         break
       case 'popularity':
-        sorted.sort((a, b) => (b.purchaseCount || 0) - (a.purchaseCount || 0))
+        filtered.sort((a, b) => (b.purchaseCount || 0) - (a.purchaseCount || 0))
+        break
+      case 'rating':
+        filtered.sort((a, b) => (b.purchaseCount || 0) - (a.purchaseCount || 0))
         break
       default:
         // Уже отсортировано по релевантности
         break
     }
-    return sorted
-  }, [searchResponse, sortBy])
+    return filtered
+  }, [searchResponse, sortBy, filters])
 
   // Объяснение ранжирования
   const rankingExplanations = useMemo(() => {
@@ -85,7 +110,25 @@ export default function SearchPage() {
   const handleInteraction = useCallback((steId: string, type: 'view' | 'click' | 'purchase' | 'positive' | 'negative') => {
     addInteraction(steId, type)
     setLastInteraction({ steId, type })
-  }, [addInteraction])
+    
+    // При клике на товар - показываем подсказки по бюджету
+    if (type === 'click' && filters.budgetMax && filters.quantity) {
+      const item = sortedResults.find(r => r.id === steId)
+      if (item) {
+        setSelectedItem({
+          id: steId,
+          price: item.priceMin,
+          quantity: filters.quantity
+        })
+      }
+    }
+  }, [addInteraction, filters.budgetMax, filters.quantity, sortedResults])
+
+  // Сброс фильтров
+  const handleResetFilters = useCallback(() => {
+    setFilters(defaultFilters)
+    setSelectedItem(null)
+  }, [])
 
   // Добавление в историю поиска и сохранение сессии (с дебаунсом)
   useEffect(() => {
@@ -158,14 +201,36 @@ export default function SearchPage() {
               synonymExpansion={searchResponse?.synonymExpansion}
             />
             
-            <SearchFilters
-              category={category}
-              setCategory={setCategory}
-              categories={categories}
-              sortBy={sortBy}
-              setSortBy={setSortBy}
-              resultsCount={sortedResults.length}
-            />
+            <div className="flex flex-wrap items-center gap-3">
+              <FiltersPanel
+                filters={filters}
+                onFiltersChange={setFilters}
+                onApply={() => {}}
+                onReset={handleResetFilters}
+              />
+              
+              <SearchFilters
+                category={category}
+                setCategory={setCategory}
+                categories={categories}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                resultsCount={sortedResults.length}
+              />
+            </div>
+            
+            {/* Информация о применённых фильтрах бюджета */}
+            {filters.maxPricePerUnit && (
+              <div className="flex items-center gap-2 rounded-lg border border-[#C93535]/30 bg-[#C93535]/5 px-4 py-2 text-sm">
+                <span className="text-[#666666]">Бюджет:</span>
+                <span className="font-semibold text-[#1a1a1a]">{filters.budgetMax?.toLocaleString('ru-RU')} ₽</span>
+                <span className="text-[#666666]">на</span>
+                <span className="font-semibold text-[#1a1a1a]">{filters.quantity?.toLocaleString('ru-RU')} шт</span>
+                <span className="mx-2 text-[#666666]">|</span>
+                <span className="text-[#666666]">Макс. цена за ед.:</span>
+                <span className="font-bold text-[#C93535]">{filters.maxPricePerUnit.toLocaleString('ru-RU')} ₽</span>
+              </div>
+            )}
 
             {/* Информация о поиске */}
             {searchResponse && query.trim() && (
@@ -200,13 +265,27 @@ export default function SearchPage() {
           )}
 
           {query.trim() ? (
-            <SearchResults
-              results={sortedResults}
-              query={query}
-              userRole={user?.role}
-              onInteraction={handleInteraction}
-              typoCorrection={searchResponse?.typoCorrection}
-            />
+            <>
+              <SearchResults
+                results={sortedResults}
+                query={query}
+                userRole={user?.role}
+                onInteraction={handleInteraction}
+                typoCorrection={searchResponse?.typoCorrection}
+                selectedItemId={selectedItem?.id}
+              />
+              
+              {/* Подсказка "Возможно, Вам понадобится" */}
+              {selectedItem && filters.budgetMax && (
+                <BudgetSuggestions
+                  selectedItemId={selectedItem.id}
+                  selectedItemPrice={selectedItem.price}
+                  selectedItemQuantity={selectedItem.quantity}
+                  totalBudget={filters.budgetMax}
+                  userRole={user?.role}
+                />
+              )}
+            </>
           ) : (
             <RecommendedSection items={recommendedItems} />
           )}
