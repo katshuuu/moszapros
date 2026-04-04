@@ -42,6 +42,7 @@ export default function SearchPage() {
   const [showExplanation, setShowExplanation] = useState(true)
   const [filters, setFilters] = useState<FilterSettings>(defaultFilters)
   const [selectedItem, setSelectedItem] = useState<{ id: string; price: number; quantity: number } | null>(null)
+  const [cartItems, setCartItems] = useState<Array<{ id: string; price: number; quantity: number }>>([])
   const [isReindexing, setIsReindexing] = useState(false)
   const [reindexMessage, setReindexMessage] = useState('')
   const [rankingDataMap, setRankingDataMap] = useState<Record<string, {
@@ -127,6 +128,11 @@ export default function SearchPage() {
     return getPositionChanges(query, sortedResults)
   }, [query, sortedResults, getPositionChanges])
 
+  // Расчёт суммы в корзине
+  const cartTotal = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+  }, [cartItems])
+
   // Обработчик взаимодействия с товаром
   const handleInteraction = useCallback((steId: string, type: 'view' | 'click' | 'purchase' | 'positive' | 'negative') => {
     addInteraction(steId, type)
@@ -142,6 +148,14 @@ export default function SearchPage() {
           break
         case 'purchase':
           message = `Покупка "${item.name}" учтена - рекомендации обновлены`
+          // Добавляем в корзину
+          setCartItems(prev => {
+            const existing = prev.find(i => i.id === steId)
+            if (existing) {
+              return prev.map(i => i.id === steId ? { ...i, quantity: i.quantity + 1 } : i)
+            }
+            return [...prev, { id: steId, price: item.priceMin, quantity: 1 }]
+          })
           break
         case 'positive':
           message = `Положительная оценка учтена - приоритет "${item.name}" повышен`
@@ -159,16 +173,16 @@ export default function SearchPage() {
     }
     
     // При клике на товар - показываем подсказки по бюджету
-    if (type === 'click' && filters.budgetMax && filters.quantity) {
+    if ((type === 'click' || type === 'purchase') && filters.budgetMax) {
       if (item) {
         setSelectedItem({
           id: steId,
           price: item.priceMin,
-          quantity: filters.quantity
+          quantity: 1
         })
       }
     }
-  }, [addInteraction, filters.budgetMax, filters.quantity, sortedResults])
+  }, [addInteraction, filters.budgetMax, sortedResults])
 
   // Сброс фильтров
   const handleResetFilters = useCallback(() => {
@@ -353,13 +367,15 @@ export default function SearchPage() {
               />
               
               {/* Подсказка "Возможно, Вам понадобится" */}
-              {selectedItem && filters.budgetMax && (
+              {filters.budgetMax && (selectedItem || cartItems.length > 0) && (
                 <BudgetSuggestions
-                  selectedItemId={selectedItem.id}
-                  selectedItemPrice={selectedItem.price}
-                  selectedItemQuantity={selectedItem.quantity}
+                  selectedItemId={selectedItem?.id || cartItems[0]?.id || ''}
+                  selectedItemPrice={selectedItem?.price || cartItems[0]?.price || 0}
+                  selectedItemQuantity={selectedItem?.quantity || 1}
                   totalBudget={filters.budgetMax}
                   userRole={user?.role}
+                  userCategory={user?.categoryPreferences?.[0]?.category}
+                  cartItems={cartItems}
                 />
               )}
             </>
