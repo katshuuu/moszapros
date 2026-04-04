@@ -210,17 +210,37 @@ export default function SearchPage() {
           {/* Информация о персонализации */}
           {user && (
             <Card className="mb-6 border-[#2D4A7C]/20 bg-[#2D4A7C]/5">
-              <CardContent className="flex items-center gap-3 py-3">
-                <Info className="h-5 w-5 text-[#2D4A7C]" />
+              <CardContent className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:gap-3">
+                <Info className="h-5 w-5 shrink-0 text-[#2D4A7C]" />
                 <div className="flex-1">
-                  <span className="text-sm text-[#1a1a1a]">
+                  <div className="text-sm text-[#1a1a1a]">
                     Результаты персонализированы для: <strong>{user.organization}</strong>
-                  </span>
-                  <Badge variant="outline" className="ml-2 text-xs">
-                    {user.role === 'office' && 'Офисные товары'}
-                    {user.role === 'medical' && 'Медицина'}
-                    {user.role === 'construction' && 'Строительство'}
-                  </Badge>
+                  </div>
+                  {user.inn && (
+                    <div className="mt-1 text-xs text-[#666666]">
+                      ИНН: <span className="font-mono">{user.inn}</span>
+                      {user.region && <span className="ml-2">| {user.region}</span>}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {user.role === 'buyer' && user.contractsCount && (
+                    <Badge variant="outline" className="text-xs">
+                      {user.contractsCount} контрактов
+                    </Badge>
+                  )}
+                  {user.categoryPreferences && user.categoryPreferences.length > 0 && (
+                    <Badge variant="outline" className="text-xs">
+                      Топ категория: {user.categoryPreferences[0].category}
+                    </Badge>
+                  )}
+                  {user.role !== 'buyer' && (
+                    <Badge variant="outline" className="text-xs">
+                      {user.role === 'office' && 'Офисные товары'}
+                      {user.role === 'medical' && 'Медицина'}
+                      {user.role === 'construction' && 'Строительство'}
+                    </Badge>
+                  )}
                 </div>
                 {interactions.length > 0 && (
                   <span className="text-xs text-[#666666]">
@@ -284,7 +304,7 @@ export default function SearchPage() {
               </div>
             )}
 
-            {/* Уведомление о динамической переиндексации */}
+            {/* Уведомление о д��намической переиндексации */}
             {isReindexing && (
               <Alert className="animate-in fade-in slide-in-from-top-2 border-[#2D4A7C] bg-[#2D4A7C]/10">
                 <RefreshCw className="h-4 w-4 animate-spin text-[#2D4A7C]" />

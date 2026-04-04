@@ -78,10 +78,21 @@ export function Header() {
                     <span className="hidden md:inline">Профиль</span>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuContent align="end" className="w-64">
                   <div className="px-2 py-1.5">
                     <p className="text-sm font-medium">{user?.fullName}</p>
-                    <p className="text-xs text-muted-foreground">{user?.email}</p>
+                    {user?.inn ? (
+                      <p className="text-xs text-muted-foreground">
+                        ИНН: <span className="font-mono">{user.inn}</span>
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">{user?.email}</p>
+                    )}
+                    {user?.contractsCount && (
+                      <p className="text-xs text-[#2D4A7C]">
+                        {user.contractsCount} контрактов | {(user.totalAmount! / 1000000).toFixed(1)} млн ₽
+                      </p>
+                    )}
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>

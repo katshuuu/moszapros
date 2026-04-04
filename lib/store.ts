@@ -5,10 +5,16 @@ import { persist } from 'zustand/middleware'
 
 export interface User {
   id: string
-  email: string
+  email?: string
+  inn?: string
   fullName: string
   organization: string
-  role: 'office' | 'medical' | 'construction'
+  region?: string
+  role: 'office' | 'medical' | 'construction' | 'buyer'
+  contractsCount?: number
+  totalAmount?: number
+  categoryPreferences?: { category: string; count: number; totalSpent: number }[]
+  contractHistory?: { steId: number; steName: string; category: string; count: number }[]
 }
 
 export interface SearchHistoryItem {
@@ -64,6 +70,7 @@ interface AuthState {
   favorites: string[]
   usePostgres: boolean
   login: (email: string, password: string) => Promise<boolean>
+  loginByINN: (inn: string) => Promise<boolean>
   register: (data: { fullName: string; email: string; organization: string; password: string }) => Promise<boolean>
   logout: () => void
   addSearchHistory: (query: string, resultsCount: number) => void
@@ -113,6 +120,62 @@ export const useAuthStore = create<AuthState>()(
 
       setUsePostgres: (value: boolean) => {
         set({ usePostgres: value })
+      },
+
+      loginByINN: async (inn: string) => {
+        try {
+          const response = await fetch('/api/buyers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inn })
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.buyer) {
+              const user: User = {
+                id: inn,
+                inn: data.buyer.inn,
+                fullName: data.buyer.name,
+                organization: data.buyer.name,
+                region: data.buyer.region,
+                role: 'buyer',
+                contractsCount: data.buyer.contractsCount,
+                totalAmount: data.buyer.totalAmount,
+                categoryPreferences: data.categoryPreferences?.map((cp: { category: string; category_count: string; total_spent: string }) => ({
+                  category: cp.category,
+                  count: parseInt(cp.category_count),
+                  totalSpent: parseFloat(cp.total_spent)
+                })) || [],
+                contractHistory: data.contractHistory?.map((ch: { ste_id: number; ste_name: string; category: string; contract_count: string }) => ({
+                  steId: ch.ste_id,
+                  steName: ch.ste_name,
+                  category: ch.category,
+                  count: parseInt(ch.contract_count)
+                })) || []
+              }
+              
+              // Добавляем предзаполненные interactions на основе истории контрактов
+              const interactions: Interaction[] = (data.contractHistory || []).map((ch: { ste_id: number; contract_count: string }) => ({
+                steId: ch.ste_id.toString(),
+                type: 'purchase' as const,
+                timestamp: new Date(),
+                weight: Math.min(parseInt(ch.contract_count) * 0.5, 5) // вес зависит от количества контрактов
+              }))
+              
+              set({ 
+                user, 
+                isAuthenticated: true,
+                interactions
+              })
+              return true
+            }
+          }
+          return false
+        } catch (error) {
+          console.error('[v0] Login by INN failed:', error)
+          return false
+        }
       },
 
       login: async (email: string, password: string) => {

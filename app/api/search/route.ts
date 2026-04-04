@@ -104,8 +104,11 @@ export async function POST(request: NextRequest) {
       query: searchQuery, 
       filters = {}, 
       userId,
+      userINN,
       userRole,
       userHistory = [],
+      categoryPreferences = [],
+      contractHistory = [],
       limit = 50,
       offset = 0 
     } = body
@@ -289,15 +292,42 @@ export async function POST(request: NextRequest) {
       let personalizationScore = 0
       const personalizationReasons: string[] = []
 
+      // Boost from contract history (strongest signal)
+      if (contractHistory && contractHistory.length > 0) {
+        for (const contract of contractHistory) {
+          if (contract.steId === row.ste_id) {
+            personalizationScore += 25
+            personalizationReasons.push(`Вы закупали этот товар ${contract.count} раз`)
+          }
+          if (contract.category === row.category) {
+            personalizationScore += 8
+            if (!personalizationReasons.some(r => r.includes('категории'))) {
+              personalizationReasons.push(`Вы часто закупаете товары категории "${contract.category}"`)
+            }
+          }
+        }
+      }
+
+      // Boost from category preferences
+      if (categoryPreferences && categoryPreferences.length > 0) {
+        const catPref = categoryPreferences.find((cp: { category: string; count: number }) => cp.category === row.category)
+        if (catPref) {
+          personalizationScore += Math.min(catPref.count * 2, 15)
+          if (!personalizationReasons.some(r => r.includes('категории'))) {
+            personalizationReasons.push(`${catPref.count} контрактов в этой категории`)
+          }
+        }
+      }
+
+      // Boost from interaction history
       if (userHistory && userHistory.length > 0) {
         for (const historyItem of userHistory) {
           if (historyItem.category === row.category) {
-            personalizationScore += 10
-            personalizationReasons.push('Вы часто просматриваете товары этой категории')
+            personalizationScore += 5
           }
           if (historyItem.steId === row.ste_id) {
-            personalizationScore += 15
-            personalizationReasons.push('Вы ранее взаимодействовали с этим товаром')
+            personalizationScore += 10
+            personalizationReasons.push('Недавно просматривали')
           }
         }
       }
