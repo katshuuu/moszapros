@@ -16,6 +16,7 @@ import { SearchResults } from '@/components/search/search-results'
 import { RecommendedSection } from '@/components/search/recommended-section'
 import { SearchExplanation } from '@/components/search/search-explanation'
 import { SessionsComparison } from '@/components/search/sessions-comparison'
+import { MLOptimizationInfo } from '@/components/search/ml-optimization-info'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Info, Zap, Clock, RefreshCw } from 'lucide-react'
@@ -44,6 +45,14 @@ export default function SearchPage() {
   const [selectedItem, setSelectedItem] = useState<{ id: string; price: number; quantity: number } | null>(null)
   const [isReindexing, setIsReindexing] = useState(false)
   const [reindexMessage, setReindexMessage] = useState('')
+  const [mlOptimization, setMlOptimization] = useState<{
+    enabled: boolean
+    gaCategories: string[]
+    gaFitness: number
+    rlTotalReward: number
+    optimizationTimeMs: number
+    steps: string[]
+  } | null>(null)
   
   useEffect(() => {
     if (!isAuthenticated) {
@@ -304,7 +313,10 @@ export default function SearchPage() {
               </div>
             )}
 
-            {/* Уведомление о д��намической переиндексации */}
+            {/* ML оптимизация */}
+            <MLOptimizationInfo optimization={mlOptimization} />
+
+            {/* Уведомление о динамической переиндексации */}
             {isReindexing && (
               <Alert className="animate-in fade-in slide-in-from-top-2 border-[#2D4A7C] bg-[#2D4A7C]/10">
                 <RefreshCw className="h-4 w-4 animate-spin text-[#2D4A7C]" />

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query, STERecord, isDatabaseConfigured } from '@/lib/db'
 import { steItems, synonyms } from '@/lib/ste-data'
+import { recommendationService } from '@/lib/ml/recommendation-service'
 
 // Simple Russian stemming (Porter-like)
 function stemRussian(word: string): string {
@@ -54,14 +55,12 @@ function levenshtein(a: string, b: string): number {
 function correctTypo(word: string, dictionary: string[]): { corrected: string; wasChanged: boolean } {
   const lowerWord = word.toLowerCase()
   
-  // Check exact match
   if (dictionary.includes(lowerWord)) {
     return { corrected: word, wasChanged: false }
   }
   
-  // Find closest match
   let bestMatch = word
-  let bestDistance = 3 // Max distance for correction
+  let bestDistance = 3
   
   for (const dictWord of dictionary) {
     const distance = levenshtein(lowerWord, dictWord.toLowerCase())
@@ -109,6 +108,8 @@ export async function POST(request: NextRequest) {
       userHistory = [],
       categoryPreferences = [],
       contractHistory = [],
+      interactions = [],
+      useMLOptimization = true,
       limit = 50,
       offset = 0 
     } = body
@@ -130,11 +131,10 @@ export async function POST(request: NextRequest) {
       ? correctedWords.map(c => c.corrected).join(' ')
       : null
 
-    // Check if database is configured
+    // Fallback mode
     if (!isDatabaseConfigured()) {
       console.log('[API] Search using fallback data')
       
-      // Search in fallback data
       const results = steItems.filter(item => {
         const nameLower = item.name.toLowerCase()
         const descLower = item.description.toLowerCase()
@@ -147,13 +147,11 @@ export async function POST(request: NextRequest) {
         )
       })
 
-      // Apply category filter
       let filteredResults = results
       if (filters.category && filters.category !== 'Все категории') {
         filteredResults = results.filter(r => r.category === filters.category)
       }
 
-      // Score and sort results
       const scoredResults = filteredResults.map(item => {
         let score = 0
         const nameLower = item.name.toLowerCase()
@@ -165,19 +163,6 @@ export async function POST(request: NextRequest) {
         }
         score += (item.purchaseCount || 0) / 100
 
-        // Personalization
-        let personalizationScore = 0
-        const personalizationReasons: string[] = []
-
-        if (userHistory?.length > 0) {
-          for (const historyItem of userHistory) {
-            if (historyItem.category === item.category) {
-              personalizationScore += 10
-              personalizationReasons.push('Вы часто просматриваете товары этой категории')
-            }
-          }
-        }
-
         return {
           ste_id: parseInt(item.id),
           name: item.name,
@@ -186,9 +171,10 @@ export async function POST(request: NextRequest) {
           priceMin: item.priceMin,
           priceMax: item.priceMax,
           purchaseCount: item.purchaseCount || 0,
-          relevanceScore: score + personalizationScore,
-          personalizationScore,
-          personalizationReasons: [...new Set(personalizationReasons)]
+          relevanceScore: score,
+          textScore: score,
+          personalizationScore: 0,
+          personalizationReasons: []
         }
       })
 
@@ -209,12 +195,12 @@ export async function POST(request: NextRequest) {
         results: scoredResults.slice(offset, offset + limit),
         totalFound: scoredResults.length,
         searchTimeMs: Date.now() - startTime,
-        source: 'fallback'
+        source: 'fallback',
+        mlOptimization: null
       })
     }
 
-    // Use PostgreSQL database - adapted to user's table structure
-    // Build search conditions for name and category columns
+    // Database search
     const searchConditions = allTerms.map((_, i) => 
       `(s.name ILIKE $${i + 1} OR s.category ILIKE $${i + 1})`
     ).join(' OR ')
@@ -235,7 +221,6 @@ export async function POST(request: NextRequest) {
       WHERE (${searchConditions})
     `
 
-    // Add category filter
     let paramIndex = allTerms.length + 1
     if (filters.category && filters.category !== 'Все категории') {
       sql += ` AND s.category = $${paramIndex}`
@@ -246,7 +231,7 @@ export async function POST(request: NextRequest) {
     sql += ` GROUP BY s.ste_id, s.name, s.category`
     sql += ` ORDER BY contract_count DESC NULLS LAST, s.ste_id`
     sql += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`
-    searchParams.push(limit, offset)
+    searchParams.push(limit * 2, 0) // Get more results for ML optimization
 
     const result = await query<STERecord & { 
       contract_count: string
@@ -256,7 +241,6 @@ export async function POST(request: NextRequest) {
     }>(sql, searchParams)
 
     if (!result) {
-      // Fallback to local data if query fails
       return NextResponse.json({
         query: { original: searchQuery, corrected: correctedQuery },
         results: [],
@@ -267,76 +251,24 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Calculate relevance scores with personalization
-    const scoredResults = result.rows.map(row => {
-      let baseScore = 0
-      
-      // Text match scoring
+    // Calculate base text scores
+    const baseResults = result.rows.map(row => {
+      let textScore = 0
       const nameLower = row.name.toLowerCase()
+      
       for (const word of words) {
         if (nameLower.includes(word)) {
-          baseScore += nameLower.startsWith(word) ? 30 : 20
+          textScore += nameLower.startsWith(word) ? 30 : 20
         }
       }
       for (const stem of stems) {
         if (nameLower.includes(stem)) {
-          baseScore += 15
+          textScore += 15
         }
       }
 
-      // Popularity boost based on contract count
       const contractCount = parseInt(row.contract_count || '0')
-      baseScore += Math.min(contractCount / 10, 20)
-
-      // Personalization boost based on user history
-      let personalizationScore = 0
-      const personalizationReasons: string[] = []
-
-      // Boost from contract history (strongest signal)
-      if (contractHistory && contractHistory.length > 0) {
-        for (const contract of contractHistory) {
-          if (contract.steId === row.ste_id) {
-            personalizationScore += 25
-            personalizationReasons.push(`Вы закупали этот товар ${contract.count} раз`)
-          }
-          if (contract.category === row.category) {
-            personalizationScore += 8
-            if (!personalizationReasons.some(r => r.includes('категории'))) {
-              personalizationReasons.push(`Вы часто закупаете товары категории "${contract.category}"`)
-            }
-          }
-        }
-      }
-
-      // Boost from category preferences
-      if (categoryPreferences && categoryPreferences.length > 0) {
-        const catPref = categoryPreferences.find((cp: { category: string; count: number }) => cp.category === row.category)
-        if (catPref) {
-          personalizationScore += Math.min(catPref.count * 2, 15)
-          if (!personalizationReasons.some(r => r.includes('категории'))) {
-            personalizationReasons.push(`${catPref.count} контрактов в этой категории`)
-          }
-        }
-      }
-
-      // Boost from interaction history
-      if (userHistory && userHistory.length > 0) {
-        for (const historyItem of userHistory) {
-          if (historyItem.category === row.category) {
-            personalizationScore += 5
-          }
-          if (historyItem.steId === row.ste_id) {
-            personalizationScore += 10
-            personalizationReasons.push('Недавно просматривали')
-          }
-        }
-      }
-
-      // Role-based boost
-      if (userRole === 'buyer' && contractCount > 10) {
-        personalizationScore += 5
-        personalizationReasons.push('Популярно среди покупателей')
-      }
+      textScore += Math.min(contractCount / 10, 20)
 
       return {
         ste_id: row.ste_id,
@@ -344,16 +276,113 @@ export async function POST(request: NextRequest) {
         category: row.category,
         contractCount,
         avgPrice: parseFloat(row.avg_price || '0'),
-        priceMin: parseFloat(row.min_price || '0'),
-        priceMax: parseFloat(row.max_price || '0'),
-        relevanceScore: baseScore + personalizationScore,
-        personalizationScore,
-        personalizationReasons: [...new Set(personalizationReasons)]
+        minPrice: parseFloat(row.min_price || '0'),
+        maxPrice: parseFloat(row.max_price || '0'),
+        textScore
       }
     })
 
-    // Sort by total score
-    scoredResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
+    // Get all categories for GA
+    const categoriesResult = await query<{ category: string }>(
+      'SELECT DISTINCT category FROM ste WHERE category IS NOT NULL'
+    )
+    const allCategories = categoriesResult?.rows.map(r => r.category) || []
+
+    // Apply ML optimization if user has history
+    let finalResults
+    let mlOptimization = null
+
+    if (useMLOptimization && (categoryPreferences.length > 0 || contractHistory.length > 0)) {
+      console.log('[API] Applying ML optimization (GA + RL + LSTM)')
+      
+      const optimized = await recommendationService.optimizeSearch(
+        baseResults,
+        {
+          query: searchQuery,
+          userId,
+          userINN,
+          userRole,
+          categoryPreferences,
+          contractHistory,
+          interactions,
+          filters
+        },
+        allCategories
+      )
+
+      finalResults = optimized.results.map(r => ({
+        ste_id: r.ste_id,
+        name: r.name,
+        category: r.category,
+        contractCount: r.contractCount,
+        avgPrice: r.avgPrice,
+        priceMin: r.minPrice,
+        priceMax: r.maxPrice,
+        relevanceScore: Math.round(r.finalScore * 100),
+        personalizationScore: Math.round(
+          (r.scoreBreakdown.categoryScore + r.scoreBreakdown.historyScore) * 100
+        ),
+        personalizationReasons: r.rankingReasons,
+        mlScoreBreakdown: r.scoreBreakdown
+      }))
+
+      mlOptimization = {
+        enabled: true,
+        gaCategories: optimized.meta.gaCategories,
+        gaFitness: optimized.meta.gaFitness,
+        rlTotalReward: optimized.meta.rlTotalReward,
+        optimizationTimeMs: optimized.meta.searchTimeMs,
+        steps: optimized.meta.optimizationSteps
+      }
+    } else {
+      // Basic personalization without ML
+      finalResults = baseResults.map(row => {
+        let personalizationScore = 0
+        const personalizationReasons: string[] = []
+
+        if (contractHistory && contractHistory.length > 0) {
+          for (const contract of contractHistory) {
+            if (contract.steId === row.ste_id) {
+              personalizationScore += 25
+              personalizationReasons.push(`Вы закупали этот товар ${contract.count} раз`)
+            }
+            if (contract.category === row.category) {
+              personalizationScore += 8
+              if (!personalizationReasons.some(r => r.includes('категории'))) {
+                personalizationReasons.push(`Вы часто закупаете товары категории "${contract.category}"`)
+              }
+            }
+          }
+        }
+
+        if (categoryPreferences && categoryPreferences.length > 0) {
+          const catPref = categoryPreferences.find(
+            (cp: { category: string; count: number }) => cp.category === row.category
+          )
+          if (catPref) {
+            personalizationScore += Math.min(catPref.count * 2, 15)
+            if (!personalizationReasons.some(r => r.includes('категории'))) {
+              personalizationReasons.push(`${catPref.count} контрактов в этой категории`)
+            }
+          }
+        }
+
+        return {
+          ste_id: row.ste_id,
+          name: row.name,
+          category: row.category,
+          contractCount: row.contractCount,
+          avgPrice: row.avgPrice,
+          priceMin: row.minPrice,
+          priceMax: row.maxPrice,
+          relevanceScore: row.textScore + personalizationScore,
+          personalizationScore,
+          personalizationReasons: [...new Set(personalizationReasons)]
+        }
+      })
+
+      finalResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
+    }
 
     // Get total count
     let countSql = `SELECT COUNT(*) as total FROM ste s WHERE (${searchConditions})`
@@ -365,7 +394,7 @@ export async function POST(request: NextRequest) {
     }
 
     const countResult = await query<{ total: string }>(countSql, countParams)
-    const totalFound = parseInt(countResult?.rows[0]?.total || String(scoredResults.length))
+    const totalFound = parseInt(countResult?.rows[0]?.total || String(finalResults.length))
 
     return NextResponse.json({
       query: {
@@ -379,10 +408,11 @@ export async function POST(request: NextRequest) {
           wasChanged: true
         } : null
       },
-      results: scoredResults,
+      results: finalResults.slice(offset, offset + limit),
       totalFound,
       searchTimeMs: Date.now() - startTime,
-      source: 'database'
+      source: 'database',
+      mlOptimization
     })
   } catch (error) {
     console.error('[API] Search error:', error)
