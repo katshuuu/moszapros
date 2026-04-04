@@ -2,60 +2,113 @@ import { Pool, PoolClient, QueryResult } from 'pg'
 
 // Singleton pattern for connection pool
 let pool: Pool | null = null
+let connectionFailed = false
 
-function getPool(): Pool {
+// Check if database is configured
+export function isDatabaseConfigured(): boolean {
+  return !!process.env.DATABASE_URL && !connectionFailed
+}
+
+function getPool(): Pool | null {
+  if (connectionFailed) {
+    return null
+  }
+
   if (!pool) {
     const connectionString = process.env.DATABASE_URL
 
     if (!connectionString) {
-      throw new Error('DATABASE_URL environment variable is not set')
+      console.log('[DB] DATABASE_URL not set, using fallback data')
+      return null
     }
 
-    pool = new Pool({
-      connectionString,
-      max: 20, // Maximum number of connections in the pool
-      idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
-      connectionTimeoutMillis: 2000, // Timeout for acquiring a connection
-    })
+    try {
+      pool = new Pool({
+        connectionString,
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
+      })
 
-    // Handle pool errors
-    pool.on('error', (err) => {
-      console.error('Unexpected error on idle client', err)
-      process.exit(-1)
-    })
+      pool.on('error', (err) => {
+        console.error('[DB] Pool error:', err.message)
+        connectionFailed = true
+      })
+    } catch (error) {
+      console.error('[DB] Failed to create pool:', error)
+      connectionFailed = true
+      return null
+    }
   }
 
   return pool
 }
 
-// Query helper function
+// Query helper function with fallback support
 export async function query<T = Record<string, unknown>>(
   text: string,
   params?: unknown[]
-): Promise<QueryResult<T>> {
+): Promise<QueryResult<T> | null> {
   const pool = getPool()
-  const start = Date.now()
-  const result = await pool.query<T>(text, params)
-  const duration = Date.now() - start
   
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[DB] Query executed', { text: text.substring(0, 100), duration, rows: result.rowCount })
+  if (!pool) {
+    return null
   }
-  
-  return result
+
+  try {
+    const start = Date.now()
+    const result = await pool.query<T>(text, params)
+    const duration = Date.now() - start
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[DB] Query executed', { text: text.substring(0, 100), duration, rows: result.rowCount })
+    }
+    
+    return result
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('[DB] Query failed:', errorMessage)
+    
+    // Mark connection as failed for connection errors
+    if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('connection')) {
+      connectionFailed = true
+    }
+    
+    return null
+  }
+}
+
+// Safe query that returns empty result on failure
+export async function safeQuery<T = Record<string, unknown>>(
+  text: string,
+  params?: unknown[]
+): Promise<{ rows: T[]; rowCount: number }> {
+  const result = await query<T>(text, params)
+  return result || { rows: [], rowCount: 0 }
 }
 
 // Get a client from the pool for transactions
-export async function getClient(): Promise<PoolClient> {
+export async function getClient(): Promise<PoolClient | null> {
   const pool = getPool()
-  return pool.connect()
+  if (!pool) return null
+  
+  try {
+    return await pool.connect()
+  } catch (error) {
+    console.error('[DB] Failed to get client:', error)
+    return null
+  }
 }
 
 // Transaction helper
 export async function withTransaction<T>(
   callback: (client: PoolClient) => Promise<T>
-): Promise<T> {
+): Promise<T | null> {
   const client = await getClient()
+  
+  if (!client) {
+    return null
+  }
   
   try {
     await client.query('BEGIN')
@@ -71,23 +124,37 @@ export async function withTransaction<T>(
 }
 
 // Test database connection
-export async function testConnection(): Promise<boolean> {
+export async function testConnection(): Promise<{ connected: boolean; error?: string }> {
+  if (!process.env.DATABASE_URL) {
+    return { connected: false, error: 'DATABASE_URL not configured' }
+  }
+
   try {
-    const result = await query('SELECT NOW()')
-    console.log('[DB] Connection successful:', result.rows[0])
-    return true
-  } catch (error) {
-    console.error('[DB] Connection failed:', error)
-    return false
+    const result = await query('SELECT NOW() as now, version() as version')
+    if (result && result.rows.length > 0) {
+      console.log('[DB] Connection successful')
+      return { connected: true }
+    }
+    return { connected: false, error: 'No response from database' }
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('[DB] Connection test failed:', errorMessage)
+    return { connected: false, error: errorMessage }
   }
 }
 
-// Close all connections (useful for graceful shutdown)
+// Close all connections
 export async function closePool(): Promise<void> {
   if (pool) {
     await pool.end()
     pool = null
   }
+}
+
+// Reset connection state (useful for retrying)
+export function resetConnection(): void {
+  connectionFailed = false
+  pool = null
 }
 
 // Types for database entities
@@ -144,8 +211,11 @@ export interface InteractionRecord {
 
 export default {
   query,
+  safeQuery,
   getClient,
   withTransaction,
   testConnection,
   closePool,
+  isDatabaseConfigured,
+  resetConnection,
 }
