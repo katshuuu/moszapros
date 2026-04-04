@@ -6,7 +6,18 @@ let connectionFailed = false
 
 // Check if database is configured
 export function isDatabaseConfigured(): boolean {
-  return !!process.env.DATABASE_URL && !connectionFailed
+  // In v0 preview environment, localhost DB is not available
+  const dbUrl = process.env.DATABASE_URL
+  if (!dbUrl) return false
+  if (connectionFailed) return false
+  // Check if trying to connect to localhost (not available in v0 preview)
+  if (dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1')) {
+    // Only allow if explicitly set (local development)
+    if (process.env.ALLOW_LOCAL_DB !== 'true') {
+      return false
+    }
+  }
+  return true
 }
 
 function getPool(): Pool | null {

@@ -17,17 +17,31 @@ export async function GET() {
       buyers: [
         {
           inn: '7710140679',
-          name: 'ООО "Демо Компания 1"',
+          name: 'ГБУЗ "Городская поликлиника №1"',
           region: 'г. Москва',
-          contractsCount: 15,
-          totalAmount: 2500000
+          contractsCount: 45,
+          totalAmount: 12500000
         },
         {
           inn: '7728662669',
-          name: 'ООО "Демо Компания 2"',
+          name: 'ГБОУ "Школа №1234"',
           region: 'г. Москва',
-          contractsCount: 8,
-          totalAmount: 1200000
+          contractsCount: 28,
+          totalAmount: 5600000
+        },
+        {
+          inn: '7701234567',
+          name: 'ГКУ "Дирекция по строительству"',
+          region: 'г. Москва',
+          contractsCount: 67,
+          totalAmount: 45000000
+        },
+        {
+          inn: '7705111222',
+          name: 'ГБУК "Московский музей"',
+          region: 'г. Москва',
+          contractsCount: 12,
+          totalAmount: 3200000
         }
       ],
       source: 'fallback'
@@ -84,17 +98,66 @@ export async function POST(request: NextRequest) {
   }
 
   if (!isDatabaseConfigured()) {
-    // Fallback mode - accept any INN for demo
+    // Fallback mode - use demo data based on INN
+    const demoBuyers: Record<string, { name: string; region: string; contractsCount: number; totalAmount: number; categories: string[] }> = {
+      '7710140679': {
+        name: 'ГБУЗ "Городская поликлиника №1"',
+        region: 'г. Москва',
+        contractsCount: 45,
+        totalAmount: 12500000,
+        categories: ['Медицинское оборудование', 'Медикаменты', 'Расходные материалы']
+      },
+      '7728662669': {
+        name: 'ГБОУ "Школа №1234"',
+        region: 'г. Москва',
+        contractsCount: 28,
+        totalAmount: 5600000,
+        categories: ['Канцелярские товары', 'Учебное оборудование', 'Мебель']
+      },
+      '7701234567': {
+        name: 'ГКУ "Дирекция по строительству"',
+        region: 'г. Москва',
+        contractsCount: 67,
+        totalAmount: 45000000,
+        categories: ['Строительные материалы', 'Инструменты', 'Спецодежда']
+      },
+      '7705111222': {
+        name: 'ГБУК "Московский музей"',
+        region: 'г. Москва',
+        contractsCount: 12,
+        totalAmount: 3200000,
+        categories: ['Канцелярские товары', 'Офисная техника', 'Хозтовары']
+      }
+    }
+    
+    const demoData = demoBuyers[inn] || {
+      name: `Организация ИНН ${inn}`,
+      region: 'г. Москва',
+      contractsCount: 10,
+      totalAmount: 1000000,
+      categories: ['Канцелярские товары', 'Хозтовары']
+    }
+    
     return NextResponse.json({
       success: true,
       buyer: {
         inn,
-        name: `Демо организация ИНН ${inn}`,
-        region: 'г. Москва',
-        contractsCount: 5,
-        totalAmount: 500000
+        name: demoData.name,
+        region: demoData.region,
+        contractsCount: demoData.contractsCount,
+        totalAmount: demoData.totalAmount
       },
-      contractHistory: [],
+      contractHistory: demoData.categories.map((cat, i) => ({
+        ste_id: i + 1,
+        ste_name: `Товар из категории ${cat}`,
+        category: cat,
+        contract_count: String(Math.floor(demoData.contractsCount / demoData.categories.length))
+      })),
+      categoryPreferences: demoData.categories.map((cat, i) => ({
+        category: cat,
+        category_count: String(Math.floor(demoData.contractsCount / demoData.categories.length)),
+        total_spent: String(demoData.totalAmount / demoData.categories.length)
+      })),
       source: 'fallback'
     })
   }
