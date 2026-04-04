@@ -111,7 +111,7 @@ export function SmartSearchBar() {
         const descStem = ste.description.toLowerCase().split(' ').map(russianStem)
         return ste.name.toLowerCase().includes(lowerQuery) ||
           ste.description.toLowerCase().includes(lowerQuery) ||
-          ste.code.toLowerCase().includes(lowerQuery) ||
+          (ste.code && ste.code.toLowerCase().includes(lowerQuery)) ||
           nameStem.includes(queryStem) ||
           descStem.includes(queryStem)
       })
@@ -290,15 +290,22 @@ export function SmartSearchBar() {
                       )}
                     </div>
                     {isHistory && (
-                      <button
+                      <span
+                        role="button"
+                        tabIndex={0}
                         onClick={(e) => {
                           e.stopPropagation()
                           // Можно добавить удаление из истории
                         }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation()
+                          }
+                        }}
                         className="rounded p-1 text-[#999999] hover:bg-[#e0e0e0] hover:text-[#666666]"
                       >
                         <X className="h-3 w-3" />
-                      </button>
+                      </span>
                     )}
                     {isTrending && (
                       <span className="rounded bg-[#C93535]/10 px-2 py-0.5 text-xs text-[#C93535]">
