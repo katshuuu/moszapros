@@ -49,24 +49,36 @@ export function Header() {
                   Поиск СТЕ
                 </Button>
               </Link>
-              <Link href="/metrics" className="hidden lg:block">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <BarChart3 className="h-4 w-4" />
-                  Метрики
-                </Button>
-              </Link>
-              <Link href="/preferences" className="hidden lg:block">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <Network className="h-4 w-4" />
-                  Граф
-                </Button>
-              </Link>
-              <Link href="/bpmn" className="hidden lg:block">
-                <Button variant="ghost" size="sm" className="gap-2">
-                  <FileText className="h-4 w-4" />
-                  BPMN
-                </Button>
-              </Link>
+              
+              {/* Аналитика - объединенное меню */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="hidden gap-2 lg:flex">
+                    <BarChart3 className="h-4 w-4" />
+                    Аналитика
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild>
+                    <Link href="/metrics" className="flex cursor-pointer items-center gap-2">
+                      <BarChart3 className="h-4 w-4" />
+                      Метрики качества
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/preferences" className="flex cursor-pointer items-center gap-2">
+                      <Network className="h-4 w-4" />
+                      Граф предпочтений
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/bpmn" className="flex cursor-pointer items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      BPMN схема
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               
               {/* Корзина */}
               <Link href="/cart">
@@ -119,16 +131,26 @@ export function Header() {
                       История поисков
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuSeparator className="lg:hidden" />
+                  <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground lg:hidden">
+                    Аналитика
+                  </div>
+                  <DropdownMenuItem asChild className="lg:hidden">
+                    <Link href="/metrics" className="flex cursor-pointer items-center gap-2">
+                      <BarChart3 className="h-4 w-4" />
+                      Метрики качества
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="lg:hidden">
                     <Link href="/preferences" className="flex cursor-pointer items-center gap-2">
                       <Network className="h-4 w-4" />
                       Граф предпочтений
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/metrics" className="flex cursor-pointer items-center gap-2 lg:hidden">
-                      <BarChart3 className="h-4 w-4" />
-                      Метрики
+                  <DropdownMenuItem asChild className="lg:hidden">
+                    <Link href="/bpmn" className="flex cursor-pointer items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      BPMN схема
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
