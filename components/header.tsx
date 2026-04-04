@@ -61,6 +61,12 @@ export function Header() {
                   BPMN
                 </Button>
               </Link>
+              <Link href="/demo" className="hidden lg:block">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <Search className="h-4 w-4" />
+                  Демо
+                </Button>
+              </Link>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-2">

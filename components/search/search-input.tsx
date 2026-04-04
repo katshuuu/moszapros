@@ -1,51 +1,60 @@
 "use client"
 
-import { Search } from 'lucide-react'
+import { Search, Sparkles, ArrowRight } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { type TypoCorrection, type SynonymExpansion } from '@/lib/search-engine'
 
 interface SearchInputProps {
   value: string
   onChange: (value: string) => void
-  correction: string | null
-  synonymsUsed: string[]
+  typoCorrection?: TypoCorrection
+  synonymExpansion?: SynonymExpansion
 }
 
-export function SearchInput({ value, onChange, correction, synonymsUsed }: SearchInputProps) {
+export function SearchInput({ value, onChange, typoCorrection, synonymExpansion }: SearchInputProps) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="relative">
-        <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+        <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#666666]" />
         <Input
           type="text"
-          placeholder="Введите название товара, код СТЕ или ключевые слова..."
+          placeholder="Введите название товара, например: бумага офисная А4..."
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-14 pl-12 pr-4 text-lg border-border bg-background shadow-sm"
+          className="h-14 rounded-xl border-2 border-[#e0e0e0] bg-white pl-12 pr-4 text-lg shadow-sm transition-colors focus:border-[#2D4A7C] focus:ring-[#2D4A7C]"
         />
       </div>
-      
-      {correction && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Возможно, вы имели в виду:</span>
+
+      {/* Показываем исправление опечаток */}
+      {typoCorrection?.wasChanged && (
+        <div className="flex items-center gap-2 rounded-lg bg-[#FFF3CD] p-3 text-sm">
+          <Sparkles className="h-4 w-4 text-[#856404]" />
+          <span className="text-[#856404]">
+            Исправлено: <s className="text-[#856404]/60">{typoCorrection.original}</s>
+          </span>
+          <ArrowRight className="h-4 w-4 text-[#856404]" />
           <button
-            onClick={() => onChange(correction)}
-            className="font-medium text-[#2D4A7C] hover:underline"
+            onClick={() => onChange(typoCorrection.corrected)}
+            className="font-medium text-[#856404] hover:underline"
           >
-            {correction}
+            {typoCorrection.corrected}
           </button>
         </div>
       )}
-      
-      {synonymsUsed.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Также искали по:</span>
-          {synonymsUsed.map((synonym, index) => (
-            <span
-              key={index}
-              className="rounded-full bg-[#EDF1F7] px-2 py-0.5 text-[#2D4A7C]"
+
+      {/* Показываем использованные синонимы */}
+      {synonymExpansion && synonymExpansion.synonymsUsed.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[#D1ECF1] p-3 text-sm">
+          <span className="text-[#0C5460]">Морфологический поиск учёл синонимы:</span>
+          {synonymExpansion.synonymsUsed.map((syn, idx) => (
+            <Badge 
+              key={idx} 
+              variant="secondary"
+              className="bg-[#0C5460]/10 text-[#0C5460]"
             >
-              {synonym}
-            </span>
+              {syn}
+            </Badge>
           ))}
         </div>
       )}

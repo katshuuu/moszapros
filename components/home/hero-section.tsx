@@ -5,6 +5,19 @@ import { useAuthStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { Search } from 'lucide-react'
 
+// Pre-computed opacities to avoid hydration mismatch
+const opacities = [
+  0.65, 0.42, 0.78, 0.35, 0.55, 0.48, 0.72, 0.38,
+  0.58, 0.45, 0.68, 0.52, 0.75, 0.40, 0.62, 0.50,
+  0.70, 0.43, 0.65, 0.55, 0.48, 0.72, 0.38, 0.60,
+  0.45, 0.68, 0.52, 0.78, 0.40, 0.62, 0.50, 0.70,
+  0.55, 0.42, 0.65, 0.48, 0.75, 0.35, 0.58, 0.52,
+  0.68, 0.45, 0.72, 0.38, 0.62, 0.50, 0.78, 0.43,
+  0.65, 0.55
+]
+
+const words = ['строительство', 'канцелярия', 'медицина', 'техника', 'мебель', 'офис', 'поставки', 'закупки']
+
 export function HeroSection() {
   const router = useRouter()
   const { isAuthenticated } = useAuthStore()
@@ -22,9 +35,9 @@ export function HeroSection() {
       {/* Background pattern - scattered text like in design */}
       <div className="absolute inset-0 opacity-10">
         <div className="absolute inset-0 flex flex-wrap items-center justify-center gap-8 overflow-hidden text-white" style={{ transform: 'rotate(-15deg)' }}>
-          {Array.from({ length: 50 }).map((_, i) => (
-            <span key={i} className="whitespace-nowrap text-sm md:text-base" style={{ opacity: Math.random() * 0.5 + 0.3 }}>
-              {['строительство', 'канцелярия', 'медицина', 'техника', 'мебель', 'офис', 'поставки', 'закупки'][i % 8]}
+          {opacities.map((opacity, i) => (
+            <span key={i} className="whitespace-nowrap text-sm md:text-base" style={{ opacity }}>
+              {words[i % 8]}
             </span>
           ))}
         </div>
