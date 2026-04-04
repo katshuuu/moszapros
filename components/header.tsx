@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useAuthStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
-import { User, LogOut, Search, History, BarChart3, FileText, Database } from 'lucide-react'
+import { User, LogOut, Search, History, BarChart3, FileText, Database, ShoppingCart } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,29 +49,33 @@ export function Header() {
                   Поиск СТЕ
                 </Button>
               </Link>
-              <Link href="/metrics" className="hidden md:block">
+              <Link href="/metrics" className="hidden lg:block">
                 <Button variant="ghost" size="sm" className="gap-2">
                   <BarChart3 className="h-4 w-4" />
                   Метрики
                 </Button>
               </Link>
-              <Link href="/bpmn" className="hidden md:block">
+              <Link href="/bpmn" className="hidden lg:block">
                 <Button variant="ghost" size="sm" className="gap-2">
                   <FileText className="h-4 w-4" />
                   BPMN
                 </Button>
               </Link>
-              <Link href="/demo" className="hidden lg:block">
+              
+              {/* Корзина */}
+              <Link href="/cart">
                 <Button variant="ghost" size="sm" className="gap-2">
-                  <Search className="h-4 w-4" />
-                  Демо
+                  <ShoppingCart className="h-4 w-4" />
+                  <span className="hidden md:inline">Корзина</span>
                 </Button>
               </Link>
+              
+              {/* Профиль */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-2">
                     <User className="h-4 w-4" />
-                    <span className="hidden md:inline">{user?.fullName.split(' ')[0]}</span>
+                    <span className="hidden md:inline">Профиль</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -87,9 +91,21 @@ export function Header() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
+                    <Link href="/search" className="flex cursor-pointer items-center gap-2 md:hidden">
+                      <Search className="h-4 w-4" />
+                      Поиск СТЕ
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
                     <Link href="/history" className="flex cursor-pointer items-center gap-2">
                       <History className="h-4 w-4" />
                       История поисков
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/metrics" className="flex cursor-pointer items-center gap-2 lg:hidden">
+                      <BarChart3 className="h-4 w-4" />
+                      Метрики
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
