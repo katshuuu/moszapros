@@ -1,13 +1,16 @@
 "use client"
 
+import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Heart, ThumbsUp, ThumbsDown, ShoppingCart, Star, TrendingUp, Info } from 'lucide-react'
+import { Heart, ThumbsUp, ThumbsDown, ShoppingCart, Star, TrendingUp, TrendingDown, Minus, Info, HelpCircle } from 'lucide-react'
 import { useAuthStore } from '@/lib/store'
+import { useSessionsStore, type DetailedExplanation } from '@/lib/sessions-store'
 import { roleRecommendations } from '@/lib/ste-data'
 import { type SearchResult, type TypoCorrection } from '@/lib/search-engine'
 import { toast } from 'sonner'
+import { ExplanationModal } from './explanation-modal'
 import {
   Tooltip,
   TooltipContent,
@@ -30,7 +33,16 @@ const roleLabels: Record<string, string> = {
 }
 
 export function SearchResults({ results, query, userRole, onInteraction, typoCorrection }: SearchResultsProps) {
-  const { favorites, toggleFavorite, addInteraction } = useAuthStore()
+  const { favorites, toggleFavorite, addInteraction, interactions } = useAuthStore()
+  const { getPositionChanges, getDetailedExplanation } = useSessionsStore()
+  
+  const [selectedItem, setSelectedItem] = useState<SearchResult | null>(null)
+  const [selectedExplanation, setSelectedExplanation] = useState<DetailedExplanation | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
+  // Получаем изменения позиций
+  const positionChanges = getPositionChanges(query, results)
+  const positionChangeMap = new Map(positionChanges.map(pc => [pc.steId, pc]))
 
   const handleFavorite = (item: SearchResult) => {
     toggleFavorite(item.id)
@@ -66,11 +78,23 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
     toast.success('Товар добавлен в корзину! Это повлияет на будущие рекомендации.')
   }
 
+  const handleShowExplanation = (item: SearchResult, index: number) => {
+    const explanation = getDetailedExplanation(item.id, query, index + 1, interactions)
+    explanation.steName = item.name
+    explanation.totalScore = item.personalizedScore
+    explanation.breakdown.relevanceScore = item.relevanceScore
+    explanation.breakdown.roleBonus = item.personalizationFactors?.roleBonus || 0
+    
+    setSelectedItem(item)
+    setSelectedExplanation(explanation)
+    setIsModalOpen(true)
+  }
+
   if (results.length === 0) {
     return (
       <div className="rounded-lg bg-white p-12 text-center shadow-sm">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#EDF1F7]">
-          <span className="text-2xl">🔍</span>
+          <span className="text-2xl">&#128269;</span>
         </div>
         <h3 className="mb-2 text-lg font-medium text-[#1a1a1a]">Ничего не найдено</h3>
         <p className="text-[#666666]">
@@ -93,6 +117,10 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
           const hasPersonalization = item.personalizationFactors && 
             (item.personalizationFactors.roleBonus > 0 || item.personalizationFactors.interactionBonus > 0)
 
+          // Получаем изменение позиции для этого товара
+          const positionChange = positionChangeMap.get(item.id)
+          const hasPositionChange = positionChange && positionChange.change !== 0
+
           return (
             <Card 
               key={item.id} 
@@ -102,6 +130,7 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
               <CardContent className="p-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                   <div className="flex-1 space-y-3">
+                    {/* Статус позиции */}
                     <div className="flex flex-wrap items-center gap-2">
                       {isTopResult && (
                         <Badge className="bg-[#2D4A7C] text-white">
@@ -109,6 +138,36 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                           #{index + 1}
                         </Badge>
                       )}
+                      
+                      {/* Изменение позиции */}
+                      {hasPositionChange && (
+                        <Badge 
+                          className={positionChange.change > 0 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                          }
+                        >
+                          {positionChange.change > 0 ? (
+                            <>
+                              <TrendingUp className="mr-1 h-3 w-3" />
+                              &#8593; поднялся на {positionChange.change} {positionChange.change === 1 ? 'место' : 'места'}
+                            </>
+                          ) : (
+                            <>
+                              <TrendingDown className="mr-1 h-3 w-3" />
+                              &#8595; опустился на {Math.abs(positionChange.change)} {Math.abs(positionChange.change) === 1 ? 'место' : 'места'}
+                            </>
+                          )}
+                        </Badge>
+                      )}
+                      
+                      {positionChange && positionChange.change === 0 && (
+                        <Badge className="bg-gray-100 text-gray-600">
+                          <Minus className="mr-1 h-3 w-3" />
+                          позиция не изменилась
+                        </Badge>
+                      )}
+
                       {hasPersonalization && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -149,7 +208,7 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="text-xs text-[#666666]">Найдено по:</span>
                         {item.matchedTerms.slice(0, 5).map((term, i) => (
-                          <Badge key={i} variant="secondary" className="bg-[#D4EDDA] text-[#155724] text-xs">
+                          <Badge key={i} variant="secondary" className="bg-[#D4EDDA] text-xs text-[#155724]">
                             {term}
                           </Badge>
                         ))}
@@ -172,7 +231,21 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                       )}
                     </div>
 
-                    {/* Объяснение персонализации для топ-3 */}
+                    {/* Кнопка "Почему этот результат?" для КАЖДОЙ карточки */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-2 text-[#2D4A7C] hover:bg-[#EDF1F7] hover:text-[#2D4A7C]"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleShowExplanation(item, index)
+                      }}
+                    >
+                      <HelpCircle className="h-4 w-4" />
+                      Почему этот результат?
+                    </Button>
+
+                    {/* Краткое объяснение для топ-3 */}
                     {isTopResult && hasPersonalization && item.personalizationFactors.explanation.length > 0 && (
                       <div className="flex items-start gap-2 rounded-lg bg-[#EDF1F7] p-3 text-sm">
                         <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#2D4A7C]" />
@@ -184,12 +257,35 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                         </div>
                       </div>
                     )}
+
+                    {/* Объяснение изменения позиции */}
+                    {hasPositionChange && positionChange.factors.length > 0 && (
+                      <div className={`flex items-start gap-2 rounded-lg p-3 text-sm ${
+                        positionChange.change > 0 ? 'bg-green-50' : 'bg-red-50'
+                      }`}>
+                        {positionChange.change > 0 ? (
+                          <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+                        ) : (
+                          <TrendingDown className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                        )}
+                        <div>
+                          <span className={`font-medium ${positionChange.change > 0 ? 'text-green-700' : 'text-red-700'}`}>
+                            {positionChange.change > 0 ? 'Поднялся' : 'Опустился'} потому что:
+                          </span>
+                          <ul className="mt-1 space-y-0.5 text-[#666666]">
+                            {positionChange.factors.slice(0, 2).map((f, i) => (
+                              <li key={i}>• {f.description}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="flex flex-col items-end gap-4">
                     <div className="text-right">
                       <div className="text-lg font-bold text-[#2D4A7C]">
-                        {item.priceMin.toLocaleString('ru-RU')} — {item.priceMax.toLocaleString('ru-RU')} ₽
+                        {item.priceMin.toLocaleString('ru-RU')} — {item.priceMax.toLocaleString('ru-RU')} &#8381;
                       </div>
                       <div className="text-xs text-[#666666]">за {item.unit}</div>
                       
@@ -273,6 +369,16 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
           )
         })}
       </div>
+
+      {/* Модальное окно с детальным объяснением */}
+      {selectedItem && selectedExplanation && (
+        <ExplanationModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          item={selectedItem}
+          explanation={selectedExplanation}
+        />
+      )}
     </TooltipProvider>
   )
 }

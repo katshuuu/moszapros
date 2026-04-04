@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
 import { useAuthStore } from '@/lib/store'
+import { useSessionsStore } from '@/lib/sessions-store'
 import { steItems, categories, roleRecommendations } from '@/lib/ste-data'
 import { performSearch, explainRankingChanges, type SearchResponse, type SearchResult } from '@/lib/search-engine'
 import { SearchInput } from '@/components/search/search-input'
@@ -12,6 +13,7 @@ import { SearchFilters } from '@/components/search/search-filters'
 import { SearchResults } from '@/components/search/search-results'
 import { RecommendedSection } from '@/components/search/recommended-section'
 import { SearchExplanation } from '@/components/search/search-explanation'
+import { SessionsComparison } from '@/components/search/sessions-comparison'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Info, Zap, Clock } from 'lucide-react'
@@ -19,6 +21,7 @@ import { Info, Zap, Clock } from 'lucide-react'
 export default function SearchPage() {
   const router = useRouter()
   const { isAuthenticated, user, addSearchHistory, interactions, addInteraction } = useAuthStore()
+  const { saveSession, getSessionsByQuery, getPositionChanges } = useSessionsStore()
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('Все категории')
   const [sortBy, setSortBy] = useState<'relevance' | 'price_asc' | 'price_desc' | 'popularity'>('relevance')
@@ -67,21 +70,34 @@ export default function SearchPage() {
     return explainRankingChanges(sortedResults, query, lastInteraction)
   }, [searchResponse, sortedResults, query, lastInteraction])
 
+  // Данные сессий для сравнения
+  const querySessionsForComparison = useMemo(() => {
+    if (!query.trim()) return []
+    return getSessionsByQuery(query)
+  }, [query, getSessionsByQuery])
+
+  const positionChangesForComparison = useMemo(() => {
+    if (!query.trim() || sortedResults.length === 0) return []
+    return getPositionChanges(query, sortedResults)
+  }, [query, sortedResults, getPositionChanges])
+
   // Обработчик взаимодействия с товаром
   const handleInteraction = useCallback((steId: string, type: 'view' | 'click' | 'purchase' | 'positive' | 'negative') => {
     addInteraction(steId, type)
     setLastInteraction({ steId, type })
   }, [addInteraction])
 
-  // Добавление в историю поиска (с дебаунсом)
+  // Добавление в историю поиска и сохранение сессии (с дебаунсом)
   useEffect(() => {
     if (query.trim() && searchResponse && searchResponse.totalFound > 0) {
       const timer = setTimeout(() => {
         addSearchHistory(query, searchResponse.totalFound)
+        // Сохраняем сессию для отслеживания изменений позиций
+        saveSession(query, sortedResults, user?.role)
       }, 1000)
       return () => clearTimeout(timer)
     }
-  }, [query, searchResponse, addSearchHistory])
+  }, [query, searchResponse, sortedResults, addSearchHistory, saveSession, user?.role])
 
   // Получаем рекомендуемые товары на основе роли
   const recommendedItems = useMemo(() => {
@@ -165,6 +181,15 @@ export default function SearchPage() {
               </div>
             )}
           </div>
+
+          {/* Сравнение сессий */}
+          {query.trim() && querySessionsForComparison.length >= 2 && (
+            <SessionsComparison
+              currentQuery={query}
+              sessions={querySessionsForComparison}
+              positionChanges={positionChangesForComparison}
+            />
+          )}
 
           {/* Объяснение персонализации */}
           {query.trim() && showExplanation && rankingExplanations.length > 0 && (

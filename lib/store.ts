@@ -23,6 +23,37 @@ export interface Interaction {
   type: 'view' | 'click' | 'purchase' | 'favorite' | 'positive' | 'negative'
   timestamp: Date
   weight: number
+  duration?: number // время просмотра в секундах
+}
+
+export interface SessionResult {
+  steId: string
+  position: number
+  relevanceScore: number
+  personalizedScore: number
+}
+
+export interface SearchSession {
+  id: string
+  query: string
+  timestamp: Date
+  results: SessionResult[]
+  userRole?: string
+}
+
+export interface PositionChange {
+  steId: string
+  steName: string
+  previousPosition: number
+  currentPosition: number
+  change: number // положительное = поднялся, отрицательное = опустился
+  factors: PositionChangeFactor[]
+}
+
+export interface PositionChangeFactor {
+  type: 'view' | 'click' | 'purchase' | 'positive' | 'negative' | 'role' | 'similar_users' | 'trending' | 'price'
+  impact: number // процент влияния
+  description: string
 }
 
 interface AuthState {
