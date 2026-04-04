@@ -293,7 +293,7 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                       </div>
                     )}
                     
-                    {item.characteristics && Object.keys(item.characteristics).length > 0 && (
+                    {item.characteristics && typeof item.characteristics === 'object' && Object.keys(item.characteristics).length > 0 ? (
                       <div className="flex flex-wrap gap-2">
                         {Object.entries(item.characteristics).slice(0, 3).map(([key, value]) => (
                           <span key={key} className="rounded bg-[#EDF1F7] px-2 py-1 text-xs text-[#1a1a1a]">
@@ -301,7 +301,7 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                           </span>
                         ))}
                       </div>
-                    )}
+                    ) : null}
                     
                     <div className="flex items-center gap-4 text-sm">
                       {item.okpdCode && <span className="text-[#666666]">ОКПД: {item.okpdCode}</span>}
@@ -350,7 +350,7 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                       </div>
                     )}
 
-                    {/* Объяснение изменения позиции */}
+                    {/* Объясне��ие изменения позиции */}
                     {hasPositionChange && positionChange.factors.length > 0 && (
                       <div className={`flex items-start gap-2 rounded-lg p-3 text-sm ${
                         positionChange.change > 0 ? 'bg-green-50' : 'bg-red-50'
