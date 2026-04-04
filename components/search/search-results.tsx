@@ -11,13 +11,22 @@ import { roleRecommendations } from '@/lib/ste-data'
 import { type SearchResult, type TypoCorrection } from '@/lib/search-engine'
 import { toast } from 'sonner'
 import { ExplanationModal } from './explanation-modal'
-import { MLFactorsCard, type MLFactors } from './ml-factors-card'
+import { RankingExplanationCard, type ScoreBreakdown } from './ranking-explanation-card'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+
+interface RankingData {
+  scoreBreakdown: ScoreBreakdown
+  positionChange: number
+  originalPosition: number
+  newPosition: number
+  signalStrength: 'strong' | 'medium' | 'weak' | 'none'
+  explanations: string[]
+}
 
 interface SearchResultsProps {
   results: SearchResult[]
@@ -26,7 +35,7 @@ interface SearchResultsProps {
   onInteraction?: (steId: string, type: 'view' | 'click' | 'purchase' | 'positive' | 'negative') => void
   typoCorrection?: TypoCorrection
   selectedItemId?: string | null
-  mlFactorsMap?: Record<string, MLFactors>
+  rankingDataMap?: Record<string, RankingData>
 }
 
 const roleLabels: Record<string, string> = {
@@ -35,7 +44,7 @@ const roleLabels: Record<string, string> = {
   construction: 'строительных материалов'
 }
 
-export function SearchResults({ results, query, userRole, onInteraction, typoCorrection, selectedItemId, mlFactorsMap = {} }: SearchResultsProps) {
+export function SearchResults({ results, query, userRole, onInteraction, typoCorrection, selectedItemId, rankingDataMap = {} }: SearchResultsProps) {
   const { favorites, toggleFavorite, addInteraction, interactions } = useAuthStore()
   const { getPositionChanges, getDetailedExplanation } = useSessionsStore()
   
@@ -239,20 +248,15 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                       )}
                     </div>
 
-                    {/* ML Factors Card - визуализация факторов ранжирования */}
-                    {(mlFactorsMap[item.id] || hasPersonalization) && (
-                      <MLFactorsCard
-                        factors={mlFactorsMap[item.id] || {
-                          personalization: {
-                            historyBoost: item.personalizationFactors?.interactionBonus || 0,
-                            categoryBoost: item.personalizationFactors?.roleBonus || 0,
-                            purchaseBoost: 0,
-                            roleBoost: item.personalizationFactors?.roleBonus || 0,
-                            explanations: item.personalizationFactors?.explanation || []
-                          }
-                        }}
-                        position={index + 1}
-                        totalItems={results.length}
+                    {/* Визуализация факторов ранжирования */}
+                    {rankingDataMap[item.id] && (
+                      <RankingExplanationCard
+                        scoreBreakdown={rankingDataMap[item.id].scoreBreakdown}
+                        positionChange={rankingDataMap[item.id].positionChange}
+                        originalPosition={rankingDataMap[item.id].originalPosition}
+                        newPosition={rankingDataMap[item.id].newPosition}
+                        signalStrength={rankingDataMap[item.id].signalStrength}
+                        explanations={rankingDataMap[item.id].explanations}
                       />
                     )}
 

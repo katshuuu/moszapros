@@ -16,7 +16,6 @@ import { SearchResults } from '@/components/search/search-results'
 import { RecommendedSection } from '@/components/search/recommended-section'
 import { SearchExplanation } from '@/components/search/search-explanation'
 import { SessionsComparison } from '@/components/search/sessions-comparison'
-import { MLOptimizationInfo } from '@/components/search/ml-optimization-info'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Info, Zap, Clock, RefreshCw } from 'lucide-react'
@@ -45,19 +44,13 @@ export default function SearchPage() {
   const [selectedItem, setSelectedItem] = useState<{ id: string; price: number; quantity: number } | null>(null)
   const [isReindexing, setIsReindexing] = useState(false)
   const [reindexMessage, setReindexMessage] = useState('')
-  const [mlOptimization, setMlOptimization] = useState<{
-    enabled: boolean
-    gaCategories: string[]
-    gaFitness: number
-    rlTotalReward: number
-    optimizationTimeMs: number
-    steps: string[]
-  } | null>(null)
-  const [mlFactorsMap, setMlFactorsMap] = useState<Record<string, {
-    ga?: { categoryMatch: boolean; fitness: number; reason: string }
-    rl?: { qValue: number; reward: number; reason: string }
-    lstm?: { score: number; temporalBoost: number; reason: string }
-    personalization?: { historyBoost: number; categoryBoost: number; purchaseBoost: number; roleBoost: number; explanations: string[] }
+  const [rankingDataMap, setRankingDataMap] = useState<Record<string, {
+    scoreBreakdown: { text: number; typo: number; synonym: number; popularity: number; personalization: number; itemBoost: number; categoryBoost: number }
+    positionChange: number
+    originalPosition: number
+    newPosition: number
+    signalStrength: 'strong' | 'medium' | 'weak' | 'none'
+    explanations: string[]
   }>>({})
   
   useEffect(() => {
@@ -319,9 +312,6 @@ export default function SearchPage() {
               </div>
             )}
 
-            {/* ML оптимизация */}
-            <MLOptimizationInfo optimization={mlOptimization} />
-
             {/* Уведомление о динамической переиндексации */}
             {isReindexing && (
               <Alert className="animate-in fade-in slide-in-from-top-2 border-[#2D4A7C] bg-[#2D4A7C]/10">
@@ -359,7 +349,7 @@ export default function SearchPage() {
                 onInteraction={handleInteraction}
                 typoCorrection={searchResponse?.typoCorrection}
                 selectedItemId={selectedItem?.id}
-                mlFactorsMap={mlFactorsMap}
+                rankingDataMap={rankingDataMap}
               />
               
               {/* Подсказка "Возможно, Вам понадобится" */}
