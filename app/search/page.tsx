@@ -53,6 +53,12 @@ export default function SearchPage() {
     optimizationTimeMs: number
     steps: string[]
   } | null>(null)
+  const [mlFactorsMap, setMlFactorsMap] = useState<Record<string, {
+    ga?: { categoryMatch: boolean; fitness: number; reason: string }
+    rl?: { qValue: number; reward: number; reason: string }
+    lstm?: { score: number; temporalBoost: number; reason: string }
+    personalization?: { historyBoost: number; categoryBoost: number; purchaseBoost: number; roleBoost: number; explanations: string[] }
+  }>>({})
   
   useEffect(() => {
     if (!isAuthenticated) {
@@ -353,6 +359,7 @@ export default function SearchPage() {
                 onInteraction={handleInteraction}
                 typoCorrection={searchResponse?.typoCorrection}
                 selectedItemId={selectedItem?.id}
+                mlFactorsMap={mlFactorsMap}
               />
               
               {/* Подсказка "Возможно, Вам понадобится" */}

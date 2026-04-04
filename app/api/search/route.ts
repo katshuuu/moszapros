@@ -323,7 +323,31 @@ export async function POST(request: NextRequest) {
           (r.scoreBreakdown.categoryScore + r.scoreBreakdown.historyScore) * 100
         ),
         personalizationReasons: r.rankingReasons,
-        mlScoreBreakdown: r.scoreBreakdown
+        mlScoreBreakdown: r.scoreBreakdown,
+        mlFactors: {
+          ga: optimized.meta.gaCategories.includes(r.category) ? {
+            categoryMatch: true,
+            fitness: optimized.meta.gaFitness,
+            reason: `Категория "${r.category}" оптимальна для вашего профиля`
+          } : undefined,
+          rl: r.scoreBreakdown.rlScore > 0 ? {
+            qValue: r.scoreBreakdown.rlScore,
+            reward: r.scoreBreakdown.rlScore * 10,
+            reason: 'Система обучилась на ваших предпочтениях'
+          } : undefined,
+          lstm: r.scoreBreakdown.lstmScore > 0.3 ? {
+            score: r.scoreBreakdown.lstmScore,
+            temporalBoost: r.scoreBreakdown.lstmScore * 0.2,
+            reason: 'Учтена последовательность ваших действий'
+          } : undefined,
+          personalization: {
+            historyBoost: Math.round(r.scoreBreakdown.historyScore * 100),
+            categoryBoost: Math.round(r.scoreBreakdown.categoryScore * 100),
+            purchaseBoost: contractHistory.some((c: { steId: number }) => c.steId === r.ste_id) ? 25 : 0,
+            roleBoost: 0,
+            explanations: r.rankingReasons
+          }
+        }
       }))
 
       mlOptimization = {

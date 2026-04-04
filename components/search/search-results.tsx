@@ -11,6 +11,7 @@ import { roleRecommendations } from '@/lib/ste-data'
 import { type SearchResult, type TypoCorrection } from '@/lib/search-engine'
 import { toast } from 'sonner'
 import { ExplanationModal } from './explanation-modal'
+import { MLFactorsCard, type MLFactors } from './ml-factors-card'
 import {
   Tooltip,
   TooltipContent,
@@ -25,6 +26,7 @@ interface SearchResultsProps {
   onInteraction?: (steId: string, type: 'view' | 'click' | 'purchase' | 'positive' | 'negative') => void
   typoCorrection?: TypoCorrection
   selectedItemId?: string | null
+  mlFactorsMap?: Record<string, MLFactors>
 }
 
 const roleLabels: Record<string, string> = {
@@ -33,7 +35,7 @@ const roleLabels: Record<string, string> = {
   construction: 'строительных материалов'
 }
 
-export function SearchResults({ results, query, userRole, onInteraction, typoCorrection, selectedItemId }: SearchResultsProps) {
+export function SearchResults({ results, query, userRole, onInteraction, typoCorrection, selectedItemId, mlFactorsMap = {} }: SearchResultsProps) {
   const { favorites, toggleFavorite, addInteraction, interactions } = useAuthStore()
   const { getPositionChanges, getDetailedExplanation } = useSessionsStore()
   
@@ -237,6 +239,23 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                       )}
                     </div>
 
+                    {/* ML Factors Card - визуализация факторов ранжирования */}
+                    {(mlFactorsMap[item.id] || hasPersonalization) && (
+                      <MLFactorsCard
+                        factors={mlFactorsMap[item.id] || {
+                          personalization: {
+                            historyBoost: item.personalizationFactors?.interactionBonus || 0,
+                            categoryBoost: item.personalizationFactors?.roleBonus || 0,
+                            purchaseBoost: 0,
+                            roleBoost: item.personalizationFactors?.roleBonus || 0,
+                            explanations: item.personalizationFactors?.explanation || []
+                          }
+                        }}
+                        position={index + 1}
+                        totalItems={results.length}
+                      />
+                    )}
+
                     {/* Кнопка "Почему этот результат?" для КАЖДОЙ карточки */}
                     <Button
                       variant="ghost"
@@ -248,7 +267,7 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                       }}
                     >
                       <HelpCircle className="h-4 w-4" />
-                      Почему этот результат?
+                      Подробнее о ранжировании
                     </Button>
 
                     {/* Краткое объяснение для топ-3 */}
