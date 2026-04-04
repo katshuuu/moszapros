@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useAuthStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
-import { User, LogOut, Search, History, BarChart3, FileText } from 'lucide-react'
+import { User, LogOut, Search, History, BarChart3, FileText, Database } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,6 +90,12 @@ export function Header() {
                     <Link href="/history" className="flex cursor-pointer items-center gap-2">
                       <History className="h-4 w-4" />
                       История поисков
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings/database" className="flex cursor-pointer items-center gap-2">
+                      <Database className="h-4 w-4" />
+                      База данных
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
