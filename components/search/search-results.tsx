@@ -293,17 +293,19 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                       </div>
                     )}
                     
-                    <div className="flex flex-wrap gap-2">
-                      {Object.entries(item.characteristics).slice(0, 3).map(([key, value]) => (
-                        <span key={key} className="rounded bg-[#EDF1F7] px-2 py-1 text-xs text-[#1a1a1a]">
-                          {key}: {value}
-                        </span>
-                      ))}
-                    </div>
+                    {item.characteristics && Object.keys(item.characteristics).length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(item.characteristics).slice(0, 3).map(([key, value]) => (
+                          <span key={key} className="rounded bg-[#EDF1F7] px-2 py-1 text-xs text-[#1a1a1a]">
+                            {key}: {value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     
                     <div className="flex items-center gap-4 text-sm">
-                      <span className="text-[#666666]">ОКПД: {item.okpdCode}</span>
-                      <span className="text-[#666666]">Ед. изм.: {item.unit}</span>
+                      {item.okpdCode && <span className="text-[#666666]">ОКПД: {item.okpdCode}</span>}
+                      {item.unit && <span className="text-[#666666]">Ед. изм.: {item.unit}</span>}
                       {item.purchaseCount && (
                         <span className="text-[#666666]">Закупок: {item.purchaseCount}</span>
                       )}
