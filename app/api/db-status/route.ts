@@ -57,8 +57,16 @@ export async function GET() {
       'SELECT ste_id, name, category FROM ste ORDER BY RANDOM() LIMIT 5'
     )
     
-    const buyersSample = await query<{ inn_buyer: string; buyer_name: string }>(
-      'SELECT DISTINCT inn_buyer::text, buyer_name FROM contracts ORDER BY RANDOM() LIMIT 5'
+    const buyersSample = await query<{ inn_buyer: string; buyer_name: string; contracts_count: string }>(
+      `SELECT 
+        inn_buyer::text as inn_buyer, 
+        buyer_name,
+        COUNT(*)::text as contracts_count
+      FROM contracts 
+      WHERE buyer_name IS NOT NULL
+      GROUP BY inn_buyer, buyer_name
+      ORDER BY COUNT(*) DESC 
+      LIMIT 5`
     )
     
     return NextResponse.json({
