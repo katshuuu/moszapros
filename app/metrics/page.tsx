@@ -327,7 +327,7 @@ export default function MetricsPage() {
                       </div>
                       <p className="text-sm text-muted-foreground">
                         Только текстовый поиск по названию и описанию товара. 
-                        Без учёта истории пользователя и поведенческих сигналов.
+                        Без учёта истории пользоват��ля и поведенческих сигналов.
                       </p>
                     </div>
                     <div className="rounded-lg bg-[#C93535]/5 p-4">
@@ -350,7 +350,7 @@ export default function MetricsPage() {
                 <CardHeader>
                   <CardTitle>Вклад факторов в улучшение</CardTitle>
                   <CardDescription>
-                    Анализ влияния каждого компонента пайплайна на качество поиска
+                    Анализ влияния каждого компоне��та пайплайна на качество поиска
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -543,28 +543,28 @@ export default function MetricsPage() {
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="rounded-lg bg-muted/50 p-4">
                   <p className="mb-2 font-medium">Precision@K</p>
-                  <p className="font-mono text-sm">$$Precision@K = \frac{{\text{{релевантные в топ-K}}}}{K}$$</p>
+                  <p className="font-mono text-sm">Precision@K = (релевантные в топ-K) / K</p>
                   <p className="mt-2 text-xs text-muted-foreground">
                     Доля релевантных результатов среди первых K позиций
                   </p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-4">
                   <p className="mb-2 font-medium">Recall@K</p>
-                  <p className="font-mono text-sm">$$Recall@K = \frac{{\text{{релевантные в топ-K}}}}{{\text{{всего релевантных}}}}$$</p>
+                  <p className="font-mono text-sm">Recall@K = (релевантные в топ-K) / (всего релевантных)</p>
                   <p className="mt-2 text-xs text-muted-foreground">
                     Доля найденных релевантных от общего числа релевантных
                   </p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-4">
                   <p className="mb-2 font-medium">NDCG@K</p>
-                  <p className="font-mono text-sm">$$NDCG@K = \frac{{DCG@K}}{{IDCG@K}}$$</p>
+                  <p className="font-mono text-sm">NDCG@K = DCG@K / IDCG@K</p>
                   <p className="mt-2 text-xs text-muted-foreground">
                     Нормализованный DCG с учётом позиции результатов
                   </p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-4">
                   <p className="mb-2 font-medium">MRR (Mean Reciprocal Rank)</p>
-                  <p className="font-mono text-sm">$$MRR = \frac{{1}}{{\text{{позиция первого релевантного}}}}$$</p>
+                  <p className="font-mono text-sm">MRR = 1 / (позиция первого релевантного)</p>
                   <p className="mt-2 text-xs text-muted-foreground">
                     Обратная позиция первого релевантного результата
                   </p>
