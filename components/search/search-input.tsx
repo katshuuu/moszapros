@@ -44,7 +44,7 @@ export function SearchInput({ value, onChange, typoCorrection, synonymExpansion 
       )}
 
       {/* Показываем использованные синонимы */}
-      {synonymExpansion && synonymExpansion.synonymsUsed.length > 0 && (
+      {synonymExpansion && synonymExpansion.synonymsUsed && synonymExpansion.synonymsUsed.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[#D1ECF1] p-3 text-sm">
           <span className="text-[#0C5460]">Морфологический поиск учёл синонимы:</span>
           {synonymExpansion.synonymsUsed.map((syn, idx) => (
