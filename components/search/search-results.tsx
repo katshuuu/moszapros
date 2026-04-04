@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useEventTracker } from '@/lib/hooks/use-event-tracker'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -47,10 +48,19 @@ const roleLabels: Record<string, string> = {
 export function SearchResults({ results, query, userRole, onInteraction, typoCorrection, selectedItemId, rankingDataMap = {} }: SearchResultsProps) {
   const { favorites, toggleFavorite, addInteraction, interactions } = useAuthStore()
   const { getPositionChanges, getDetailedExplanation } = useSessionsStore()
+  const { trackClick, trackSearch, trackSelect, startDwellTracking, stopDwellTracking, trackHover } = useEventTracker()
   
   const [selectedItem, setSelectedItem] = useState<SearchResult | null>(null)
   const [selectedExplanation, setSelectedExplanation] = useState<DetailedExplanation | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const hoverTimers = useRef<Map<string, number>>(new Map())
+
+  // Track search results when they change
+  useEffect(() => {
+    if (results.length > 0 && query) {
+      trackSearch(query, results.length)
+    }
+  }, [query, results.length, trackSearch])
 
   // Получаем изменения позиций
   const positionChanges = getPositionChanges(query, results)
@@ -79,15 +89,35 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
     toast.success('Спасибо! Система понизит приоритет подобных товаров.')
   }
 
-  const handleClick = (item: SearchResult) => {
+  const handleClick = (item: SearchResult, position: number) => {
     addInteraction(item.id, 'click')
     onInteraction?.(item.id, 'click')
+    // Track click event
+    trackClick(item.id, item.name, item.category, position, query)
   }
 
   const handlePurchase = (item: SearchResult) => {
     addInteraction(item.id, 'purchase')
     onInteraction?.(item.id, 'purchase')
+    // Track select/purchase event
+    trackSelect(item.id, item.name, item.category, { action: 'add_to_cart', query })
     toast.success('Товар добавлен в корзину! Это повлияет на будущие рекомендации.')
+  }
+
+  // Handle hover tracking
+  const handleMouseEnter = (item: SearchResult) => {
+    hoverTimers.current.set(item.id, Date.now())
+    startDwellTracking(item.id, item.name, item.category)
+  }
+
+  const handleMouseLeave = (item: SearchResult) => {
+    const startTime = hoverTimers.current.get(item.id)
+    if (startTime) {
+      const duration = Date.now() - startTime
+      trackHover(item.id, item.name, item.category, duration)
+      hoverTimers.current.delete(item.id)
+    }
+    stopDwellTracking(item.id, item.name, item.category)
   }
 
   const handleShowExplanation = (item: SearchResult, index: number) => {
@@ -142,7 +172,9 @@ export function SearchResults({ results, query, userRole, onInteraction, typoCor
                   ? 'border-2 border-[#C93535] bg-[#C93535]/5 ring-2 ring-[#C93535]/20' 
                   : 'border-[#e0e0e0] bg-white'
               }`}
-              onClick={() => handleClick(item)}
+              onClick={() => handleClick(item, index + 1)}
+              onMouseEnter={() => handleMouseEnter(item)}
+              onMouseLeave={() => handleMouseLeave(item)}
             >
               <CardContent className="p-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">

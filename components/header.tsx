@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useAuthStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
-import { User, LogOut, Search, History, BarChart3, FileText, Database, ShoppingCart } from 'lucide-react'
+import { User, LogOut, Search, History, BarChart3, FileText, Database, ShoppingCart, Network } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,6 +53,12 @@ export function Header() {
                 <Button variant="ghost" size="sm" className="gap-2">
                   <BarChart3 className="h-4 w-4" />
                   Метрики
+                </Button>
+              </Link>
+              <Link href="/preferences" className="hidden lg:block">
+                <Button variant="ghost" size="sm" className="gap-2">
+                  <Network className="h-4 w-4" />
+                  Граф
                 </Button>
               </Link>
               <Link href="/bpmn" className="hidden lg:block">
@@ -111,6 +117,12 @@ export function Header() {
                     <Link href="/history" className="flex cursor-pointer items-center gap-2">
                       <History className="h-4 w-4" />
                       История поисков
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/preferences" className="flex cursor-pointer items-center gap-2">
+                      <Network className="h-4 w-4" />
+                      Граф предпочтений
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
