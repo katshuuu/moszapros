@@ -40,23 +40,28 @@ export async function GET(request: Request) {
       `SELECT ste_id::text, name, category FROM ste WHERE ste_id = 28369665`
     )
 
+    const total = totalCount?.rows?.[0]?.count || '0'
+    const found = matchCount?.rows?.[0]?.count || '0'
+    const samples = searchResults?.rows || []
+    const specific = specificItem?.rows?.[0] || null
+
     return NextResponse.json({
       status: 'success',
       searchQuery: q,
       database: {
-        totalSteRecords: totalCount[0]?.count || '0',
-        message: `Приложение имеет доступ ко всем ${totalCount[0]?.count} записям таблицы ste`
+        totalSteRecords: total,
+        message: `Приложение имеет доступ ко всем ${total} записям таблицы ste`
       },
       searchResults: {
-        found: matchCount[0]?.count || '0',
-        message: `По запросу "${q}" найдено ${matchCount[0]?.count} товаров из ${totalCount[0]?.count}`,
-        samples: searchResults
+        found: found,
+        message: `По запросу "${q}" найдено ${found} товаров из ${total}`,
+        samples: samples
       },
       verification: {
-        specificItemExists: specificItem.length > 0,
-        specificItem: specificItem[0] || null,
-        message: specificItem.length > 0 
-          ? `Товар ste_id=28369665 найден: "${specificItem[0]?.name}"`
+        specificItemExists: !!specific,
+        specificItem: specific,
+        message: specific 
+          ? `Товар ste_id=28369665 найден: "${specific.name}"`
           : 'Товар не найден'
       }
     })
