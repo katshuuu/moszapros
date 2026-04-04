@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
 import { useAuthStore } from '@/lib/store'
@@ -22,9 +22,19 @@ import { Info, Zap, Clock } from 'lucide-react'
 
 export default function SearchPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialQuery = searchParams.get('q') || ''
   const { isAuthenticated, user, addSearchHistory, interactions, addInteraction } = useAuthStore()
   const { saveSession, getSessionsByQuery, getPositionChanges } = useSessionsStore()
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
+  
+  // Обновляем query при изменении URL параметров
+  useEffect(() => {
+    const urlQuery = searchParams.get('q')
+    if (urlQuery && urlQuery !== query) {
+      setQuery(urlQuery)
+    }
+  }, [searchParams])
   const [category, setCategory] = useState('Все категории')
   const [sortBy, setSortBy] = useState<'relevance' | 'price_asc' | 'price_desc' | 'popularity'>('relevance')
   const [lastInteraction, setLastInteraction] = useState<{ steId: string; type: string } | undefined>()
