@@ -1,13 +1,12 @@
 "use client"
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Header } from '@/components/header'
 import { Footer } from '@/components/footer'
 import { useAuthStore } from '@/lib/store'
 import { useSessionsStore } from '@/lib/sessions-store'
-import { steItems, categories, roleRecommendations } from '@/lib/ste-data'
-import { performSearch, explainRankingChanges, type SearchResponse, type SearchResult } from '@/lib/search-engine'
+import { categories, roleRecommendations, steItems } from '@/lib/ste-data'
 import { SearchInput } from '@/components/search/search-input'
 import { SearchFilters } from '@/components/search/search-filters'
 import { FiltersPanel, type SearchFilters as FilterSettings, defaultFilters } from '@/components/search/filters-panel'
@@ -18,8 +17,88 @@ import { SearchExplanation } from '@/components/search/search-explanation'
 import { SessionsComparison } from '@/components/search/sessions-comparison'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Info, Zap, Clock, RefreshCw } from 'lucide-react'
+import { Info, Zap, Clock, RefreshCw, Database, Loader2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+
+// Тип результата поиска из API
+interface APISearchResult {
+  ste_id: number
+  name: string
+  category: string
+  description?: string
+  priceMin: number
+  priceMax: number
+  contractCount?: number
+  avgPrice?: number
+  purchaseCount?: number
+  relevanceScore: number
+  textScore: number
+  personalizationScore: number
+  personalizationReasons: string[]
+  positionChange: number
+  originalPosition: number
+  newPosition?: number
+  scoreBreakdown: {
+    text: number
+    typo: number
+    synonym: number
+    popularity: number
+    personalization: number
+    itemBoost: number
+    categoryBoost: number
+  }
+  signalStrength: 'strong' | 'medium' | 'weak' | 'none'
+}
+
+interface APISearchResponse {
+  query: {
+    original: string
+    corrected: string | null
+    stems: string[]
+    expanded: string[]
+    typoCorrection: {
+      original: string
+      corrected: string
+      wasChanged: boolean
+    }
+  }
+  results: APISearchResult[]
+  totalFound: number
+  searchTimeMs: number
+  source: 'database' | 'fallback' | 'error'
+  pipeline?: {
+    typoCorrection: { original: string; corrected: string; wasChanged: boolean }
+    synonymExpansion: { originalTerms: string[]; expandedTerms: string[]; synonymsUsed: string[] }
+    userProfile: { hasHistory: boolean; topCategories: string[]; signalStrength: string }
+    rerankingSummary: { totalReranked: number; significantChanges: number; avgPositionChange: number }
+    explanationForUser: string
+    pipelineTimeMs: number
+  }
+}
+
+// Преобразование результата API в формат для компонентов
+interface SearchResult {
+  id: string
+  name: string
+  category: string
+  description: string
+  priceMin: number
+  priceMax: number
+  purchaseCount: number
+  relevanceScore: number
+  personalizedScore: number
+  matchedTerms: string[]
+  personalizationFactors: {
+    roleBonus: number
+    interactionBonus: number
+    viewCount: number
+    clickCount: number
+    purchaseCount: number
+    positiveSignals: number
+    negativeSignals: number
+    explanation: string[]
+  }
+}
 
 export default function SearchPage() {
   const router = useRouter()
@@ -29,13 +108,21 @@ export default function SearchPage() {
   const { saveSession, getSessionsByQuery, getPositionChanges } = useSessionsStore()
   const [query, setQuery] = useState(initialQuery)
   
+  // Состояния для API поиска
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchResponse, setSearchResponse] = useState<APISearchResponse | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [dataSource, setDataSource] = useState<'database' | 'fallback' | 'error' | null>(null)
+  const searchAbortController = useRef<AbortController | null>(null)
+  
   // Обновляем query при изменении URL параметров
   useEffect(() => {
     const urlQuery = searchParams.get('q')
     if (urlQuery && urlQuery !== query) {
       setQuery(urlQuery)
     }
-  }, [searchParams])
+  }, [searchParams, query])
+  
   const [category, setCategory] = useState('Все категории')
   const [sortBy, setSortBy] = useState<'relevance' | 'price_asc' | 'price_desc' | 'popularity'>('relevance')
   const [lastInteraction, setLastInteraction] = useState<{ steId: string; type: string } | undefined>()
@@ -59,19 +146,117 @@ export default function SearchPage() {
     }
   }, [isAuthenticated, router])
 
-  // Выполняем поиск с использованием нового движка
-  const searchResponse: SearchResponse | null = useMemo(() => {
+  // Выполняем поиск через API
+  useEffect(() => {
     if (!query.trim()) {
-      return null
+      setSearchResults([])
+      setSearchResponse(null)
+      setDataSource(null)
+      return
     }
-    return performSearch(query, category, user?.role, interactions)
-  }, [query, category, user?.role, interactions])
+
+    // Отменяем предыдущий запрос
+    if (searchAbortController.current) {
+      searchAbortController.current.abort()
+    }
+    searchAbortController.current = new AbortController()
+
+    const performAPISearch = async () => {
+      setIsLoading(true)
+      try {
+        const response = await fetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query,
+            filters: { category: category !== 'Все категории' ? category : undefined },
+            userId: user?.id,
+            userINN: user?.inn,
+            userRole: user?.role,
+            categoryPreferences: user?.categoryPreferences || [],
+            contractHistory: user?.contractHistory || [],
+            interactions: interactions.map(i => ({
+              steId: i.steId,
+              type: i.type,
+              timestamp: i.timestamp
+            })),
+            limit: 50
+          }),
+          signal: searchAbortController.current?.signal
+        })
+
+        if (!response.ok) {
+          throw new Error('Search failed')
+        }
+
+        const data: APISearchResponse = await response.json()
+        setSearchResponse(data)
+        setDataSource(data.source)
+
+        // Преобразуем результаты API в формат компонентов
+        const transformedResults: SearchResult[] = data.results.map(item => ({
+          id: String(item.ste_id),
+          name: item.name,
+          category: item.category,
+          description: item.description || '',
+          priceMin: item.priceMin || 0,
+          priceMax: item.priceMax || item.priceMin || 0,
+          purchaseCount: item.contractCount || item.purchaseCount || 0,
+          relevanceScore: item.relevanceScore,
+          personalizedScore: item.relevanceScore + item.personalizationScore,
+          matchedTerms: data.query.expanded || [],
+          personalizationFactors: {
+            roleBonus: item.scoreBreakdown.personalization,
+            interactionBonus: item.scoreBreakdown.itemBoost + item.scoreBreakdown.categoryBoost,
+            viewCount: 0,
+            clickCount: 0,
+            purchaseCount: 0,
+            positiveSignals: 0,
+            negativeSignals: 0,
+            explanation: item.personalizationReasons || []
+          }
+        }))
+
+        setSearchResults(transformedResults)
+
+        // Обновляем карту данных ранжирования
+        const newRankingDataMap: Record<string, typeof rankingDataMap[string]> = {}
+        data.results.forEach(item => {
+          newRankingDataMap[String(item.ste_id)] = {
+            scoreBreakdown: item.scoreBreakdown,
+            positionChange: item.positionChange,
+            originalPosition: item.originalPosition,
+            newPosition: item.newPosition || item.originalPosition - item.positionChange,
+            signalStrength: item.signalStrength,
+            explanations: item.personalizationReasons || []
+          }
+        })
+        setRankingDataMap(newRankingDataMap)
+
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          console.error('[v0] Search API error:', error)
+          setSearchResults([])
+          setDataSource('error')
+        }
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    // Дебаунс поиска
+    const timer = setTimeout(performAPISearch, 300)
+    return () => {
+      clearTimeout(timer)
+      if (searchAbortController.current) {
+        searchAbortController.current.abort()
+      }
+    }
+  }, [query, category, user, interactions])
 
   // Фильтрация и сортировка результатов
-  const sortedResults = useMemo(() => {
-    if (!searchResponse) return []
-    
-    let filtered = [...searchResponse.results]
+  const sortedResults = (() => {
+    let filtered = [...searchResults]
     
     // Применяем фильтры бюджета
     if (filters.maxPricePerUnit) {
@@ -83,12 +268,12 @@ export default function SearchPage() {
       filtered = filtered.filter(item => item.priceMin >= filters.budgetMin!)
     }
     
-    // Фильтр по наличию (имитация - используем purchaseCount как индикатор популярности/наличия)
+    // Фильтр по наличию
     if (filters.inStock) {
       filtered = filtered.filter(item => (item.purchaseCount || 0) > 0)
     }
     
-    // Сортировка с учетом настроек фильтра
+    // Сортировка
     const sortOption = filters.sortBy || sortBy
     switch (sortOption) {
       case 'price_asc':
@@ -100,32 +285,39 @@ export default function SearchPage() {
       case 'popularity':
         filtered.sort((a, b) => (b.purchaseCount || 0) - (a.purchaseCount || 0))
         break
-      case 'rating':
-        filtered.sort((a, b) => (b.purchaseCount || 0) - (a.purchaseCount || 0))
-        break
       default:
         // Уже отсортировано по релевантности
         break
     }
     return filtered
-  }, [searchResponse, sortBy, filters])
+  })()
 
   // Объяснение ранжирования
-  const rankingExplanations = useMemo(() => {
+  const rankingExplanations = (() => {
     if (!searchResponse || sortedResults.length === 0) return []
-    return explainRankingChanges(sortedResults, query, lastInteraction)
-  }, [searchResponse, sortedResults, query, lastInteraction])
+    const explanations: string[] = []
+    
+    // Добавляем объяснение из пайплайна
+    if (searchResponse.pipeline?.explanationForUser) {
+      explanations.push(searchResponse.pipeline.explanationForUser)
+    }
+    
+    // Топ-3 результата с объяснениями
+    sortedResults.slice(0, 3).forEach((result, i) => {
+      if (result.personalizationFactors.explanation.length > 0) {
+        explanations.push(`#${i + 1} "${result.name}": ${result.personalizationFactors.explanation[0]}`)
+      }
+    })
+    
+    return explanations
+  })()
 
   // Данные сессий для сравнения
-  const querySessionsForComparison = useMemo(() => {
-    if (!query.trim()) return []
-    return getSessionsByQuery(query)
-  }, [query, getSessionsByQuery])
+  const querySessionsForComparison = query.trim() ? getSessionsByQuery(query) : []
 
-  const positionChangesForComparison = useMemo(() => {
-    if (!query.trim() || sortedResults.length === 0) return []
-    return getPositionChanges(query, sortedResults)
-  }, [query, sortedResults, getPositionChanges])
+  const positionChangesForComparison = query.trim() && sortedResults.length > 0 
+    ? getPositionChanges(query, sortedResults) 
+    : []
 
   // Обработчик взаимодействия с товаром
   const handleInteraction = useCallback((steId: string, type: 'view' | 'click' | 'purchase' | 'positive' | 'negative') => {
@@ -263,8 +455,8 @@ export default function SearchPage() {
             <SearchInput
               value={query}
               onChange={setQuery}
-              typoCorrection={searchResponse?.typoCorrection}
-              synonymExpansion={searchResponse?.synonymExpansion}
+              typoCorrection={searchResponse?.query?.typoCorrection || searchResponse?.pipeline?.typoCorrection}
+              synonymExpansion={searchResponse?.pipeline?.synonymExpansion}
             />
             
             <div className="flex flex-wrap items-center gap-3">
@@ -306,9 +498,28 @@ export default function SearchPage() {
                   <span>Поиск за {searchResponse.searchTimeMs.toFixed(1)} мс</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-[#666666]">
-                  <Zap className="h-4 w-4" />
-                  <span>Локальный морфологический анализ</span>
+                  <Database className="h-4 w-4" />
+                  <span>
+                    {dataSource === 'database' 
+                      ? `Найдено ${searchResponse.totalFound.toLocaleString('ru-RU')} товаров в БД` 
+                      : dataSource === 'fallback' 
+                        ? 'Демо-режим (БД не подключена)' 
+                        : 'Ошибка поиска'}
+                  </span>
                 </div>
+                {dataSource === 'database' && (
+                  <Badge variant="outline" className="text-xs text-green-600 border-green-600">
+                    PostgreSQL
+                  </Badge>
+                )}
+              </div>
+            )}
+            
+            {/* Индикатор загрузки */}
+            {isLoading && (
+              <div className="flex items-center gap-2 text-sm text-[#666666]">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Поиск в базе данных...</span>
               </div>
             )}
 
@@ -347,7 +558,7 @@ export default function SearchPage() {
                 query={query}
                 userRole={user?.role}
                 onInteraction={handleInteraction}
-                typoCorrection={searchResponse?.typoCorrection}
+                typoCorrection={searchResponse?.query?.typoCorrection || searchResponse?.pipeline?.typoCorrection}
                 selectedItemId={selectedItem?.id}
                 rankingDataMap={rankingDataMap}
               />

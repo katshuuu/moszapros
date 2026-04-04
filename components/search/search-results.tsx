@@ -9,8 +9,37 @@ import { Heart, ThumbsUp, ThumbsDown, ShoppingCart, Star, TrendingUp, TrendingDo
 import { useAuthStore } from '@/lib/store'
 import { useSessionsStore, type DetailedExplanation } from '@/lib/sessions-store'
 import { roleRecommendations } from '@/lib/ste-data'
-import { type SearchResult, type TypoCorrection } from '@/lib/search-engine'
 import { toast } from 'sonner'
+
+// Локальный тип для результатов поиска (совместим с API и локальным поиском)
+interface SearchResult {
+  id: string
+  name: string
+  category: string
+  description: string
+  priceMin: number
+  priceMax: number
+  purchaseCount?: number
+  relevanceScore: number
+  personalizedScore: number
+  matchedTerms: string[]
+  personalizationFactors: {
+    roleBonus: number
+    interactionBonus: number
+    viewCount: number
+    clickCount: number
+    purchaseCount: number
+    positiveSignals: number
+    negativeSignals: number
+    explanation: string[]
+  }
+}
+
+interface TypoCorrection {
+  original: string
+  corrected: string
+  wasChanged: boolean
+}
 import { ExplanationModal } from './explanation-modal'
 import { RankingExplanationCard, type ScoreBreakdown } from './ranking-explanation-card'
 import {
